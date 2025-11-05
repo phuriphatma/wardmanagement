@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ward & Bed Manager</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- CryptoJS for optional AES encryption -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <style>
+    body, html { margin:0; padding:0; height:100%; font-family:sans-serif; }
+    #container { display:flex; height:100%; }
+    #sidebar {
+      width:250px; border-right:1px solid #ccc; box-sizing:border-box;
+      padding:10px; overflow-y:auto;
+    }
+    #main {
+      flex:1; padding:10px; overflow-y:auto;
+    }
+    button { margin:4px 0; padding:6px 12px; }
+    ul { list-style:none; padding:0; }
+    li { padding:6px; cursor:pointer; }
+    li.selected { background:#def; }
+    .bed-item { border-bottom:1px solid #eee; padding:6px 0; }
+    .controls { margin-top:20px; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="sidebar">
+      <button id="addWardBtn">+ Add Ward</button>
+      <ul id="wardList"></ul>
+      <div class="controls">
+        <button id="exportBtn">Export Data</button>
+        <button id="importBtn">Import Data</button>
+        <input type="file" id="fileInput" style="display:none">
+      </div>
+    </div>
+    <div id="main">
+      <h2 id="wardTitle">Select a ward</h2>
+      <button id="addBedBtn" disabled>+ Add Bed</button>
+      <div id="bedList"></div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    const STORAGE_KEY = 'wardManagerData';
+    let data = { wards: [] };
+    let selectedWardId = null;
+
+    // UTIL: save to localStorage
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    // UTIL: load from storage
+    function load() {
+      const js = localStorage.getItem(STORAGE_KEY);
+      if (js) {
+        try { data = JSON.parse(js); }
+        catch(e) { console.error('Failed to parse stored data', e); }
+      }
+    }
+
+    // UTIL: generate simple unique id
+    function uuid() {
+      return 'x'+Date.now()+Math.floor(Math.random()*1000);
+    }
+
+    // RENDER ward list
+    function renderWards() {
+      const ul = document.getElementById('wardList');
+      ul.innerHTML = '';
+      data.wards.forEach(w => {
+        const li = document.createElement('li');
+        li.textContent = w.name + ' ('+ w.beds.length +' beds)';
+        if (w.id === selectedWardId) li.classList.add('selected');
+        li.onclick = ()=> { selectedWardId = w.id; renderWards(); renderBeds(); };
+        ul.appendChild(li);
+      });
+    }
+
+    // RENDER beds for selected ward
+    function renderBeds() {
+      const bedList = document.getElementById('bedList');
+      const title = document.getElementById('wardTitle');
+      const addBedBtn = document.getElementById('addBedBtn');
+      bedList.innerHTML = '';
+
+      const ward = data.wards.find(w=>w.id===selectedWardId);
+      if (!ward) {
+        title.textContent = 'Select a ward';
+        addBedBtn.disabled = true;
+        return;
+      }
+      title.textContent = 'Ward: ' + ward.name;
+      addBedBtn.disabled = false;
+
+      ward.beds.forEach(b => {
+        const div = document.createElement('div');
+        div.className = 'bed-item';
+        const html = '<strong>'+b.name+'</strong><br>'
+                   + '<small>'+b.details.replace(/\n/g,'<br>')+'</small><br>'
+                   + '<button data-id="'+b.id+'">Edit</button> '
+                   + '<button data-del="'+b.id+'">Delete</button>';
+        div.innerHTML = html;
+        // Edit
+        div.querySelector('button[data-id]').onclick = ()=> {
+          const newName = prompt('Bed name', b.name);
+          if (!newName) return;
+          const newDetails = prompt('Details', b.details) || '';
+          b.name = newName;
+          b.details = newDetails;
+          save(); renderBeds(); renderWards();
+        };
+        // Delete
+        div.querySelector('button[data-del]').onclick = ()=> {
+          if (!confirm('Delete this bed?')) return;
+          ward.beds = ward.beds.filter(x=>x.id!==b.id);
+          save(); renderBeds(); renderWards();
+        };
+        bedList.appendChild(div);
+      });
+    }
+
+    // ADD ward
+    document.getElementById('addWardBtn').onclick = ()=>{
+      const name = prompt('Ward name');
+      if (!name) return;
+      data.wards.push({ id: uuid(), name, beds: [] });
+      save(); renderWards();
+    };
+
+    // ADD bed
+    document.getElementById('addBedBtn').onclick = ()=>{
+      const ward = data.wards.find(w=>w.id===selectedWardId);
+      if (!ward) return;
+      const name = prompt('Bed name');
+      if (!name) return;
+      const details = prompt('Details for this bed')||'';
+      ward.beds.push({ id: uuid(), name, details });
+      save(); renderBeds(); renderWards();
+    };
+
+    // EXPORT data as encrypted JSON
+    document.getElementById('exportBtn').onclick = ()=>{
+      const pass = prompt('Enter a password to encrypt your data (keep it safe!)');
+      if (pass===null) return;
+      const text = JSON.stringify(data);
+      const enc = CryptoJS.AES.encrypt(text, pass).toString();
+      const blob = new Blob([enc], {type:'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ward-backup.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    // IMPORT data
+    document.getElementById('importBtn').onclick = ()=>{
+      document.getElementById('fileInput').click();
+    };
+    document.getElementById('fileInput').onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const enc = ev.target.result;
+        const pass = prompt('Enter the password you used to encrypt');
+        if (pass===null) return;
+        try {
+          const dec = CryptoJS.AES.decrypt(enc, pass).toString(CryptoJS.enc.Utf8);
+          const obj = JSON.parse(dec);
+          if (!confirm('This will overwrite your current data. Continue?')) return;
+          data = obj;
+          save();
+          selectedWardId = null;
+          renderWards(); renderBeds();
+          alert('Data imported!');
+        } catch(err) {
+          alert('Failed to decrypt or parse data. Wrong password or corrupt file.');
+        }
+      };
+      reader.readAsText(file);
+      // reset input
+      e.target.value = '';
+    };
+
+    // INITIALIZE
+    load();
+    renderWards();
+    renderBeds();
+
+  })();
+  </script>
+</body>
+</html>
