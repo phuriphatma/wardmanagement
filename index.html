@@ -72,13 +72,13 @@
         border-bottom: 1px solid #eee;
     }
 
+    /* Prevent internal textarea scrollbars (we forward wheel/touch to parent) */
     #bedList textarea {
       width:100%; font-size:14px;
       padding:6px; border:1px solid #ccc; border-radius:4px;
-      /* Crucially, internal scroll is prevented by JS autoGrow, 
-         but we allow manual resize if needed: */
-      resize: vertical; 
+      resize: vertical; /* still allow manual resize if wanted */
       min-height: 28px; /* Standard input height for single line */
+      overflow: hidden;
     }
     /* Style for the Bed Name Textarea (Title) */
     #bedList .bed-name {
@@ -155,10 +155,64 @@
     }
     function uuid(){ return 'x'+Date.now()+Math.floor(Math.random()*1000) }
 
-    // Helper function for textareas to auto-expand vertically (no internal scroll)
+    // Helper to auto-grow textarea height (no internal scroll)
     function autoGrowTextarea(element) {
-        element.style.height = 'auto'; // Reset height
+        element.style.height = 'auto';
         element.style.height = element.scrollHeight + 'px';
+    }
+
+    // Find nearest scrollable ancestor (vertical)
+    function findScrollableAncestor(el){
+      while(el && el !== document.body && el !== document.documentElement){
+        const style = getComputedStyle(el);
+        const overflowY = style.overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+        el = el.parentElement;
+      }
+      // fallback to main or document scrolling element
+      const main = document.getElementById('main');
+      if (main && main.scrollHeight > main.clientHeight) return main;
+      return document.scrollingElement || document.documentElement;
+    }
+
+    // Forward wheel to nearest scrollable parent when textarea can't scroll itself
+    function forwardWheel(e){
+      const ta = e.currentTarget;
+      // if textarea can scroll (content overflow), let default behavior handle it
+      if (ta.scrollHeight > ta.clientHeight + 1) return;
+      const parent = findScrollableAncestor(ta.parentElement);
+      parent.scrollTop += e.deltaY;
+      e.preventDefault();
+    }
+
+    // Touch forwarding for mobile: when textarea doesn't scroll, forward touch move to parent
+    function attachTouchForwarding(ta){
+      let startY = null;
+      let parent = null;
+      ta.addEventListener('touchstart', function(e){
+        startY = e.touches[0](undefined).clientY;
+        parent = findScrollableAncestor(ta.parentElement);
+      }, {passive:true});
+
+      ta.addEventListener('touchmove', function(e){
+        if (!startY) return;
+        // if textarea has its own scrollable content, allow native scrolling
+        if (ta.scrollHeight > ta.clientHeight + 1) return;
+        const y = e.touches[0](undefined).clientY;
+        const dy = startY - y; // positive when swiping up
+        parent.scrollTop += dy;
+        startY = y;
+        e.preventDefault(); // prevent textarea from capturing the scroll
+      }, {passive:false});
+
+      ta.addEventListener('touchend', function(){ startY = null; }, {passive:true});
+    }
+
+    function addScrollForwardingHandlers(ta){
+      // wheel
+      ta.addEventListener('wheel', forwardWheel, {passive:false});
+      // touch forwarding
+      attachTouchForwarding(ta);
     }
 
     function renderWards(){
@@ -209,82 +263,59 @@
         div.draggable = true;
         div.setAttribute('data-bed-id', b.id);
 
-        // --- Drag-and-Drop for Beds ---
+        // Drag-and-drop for beds
         div.addEventListener('dragstart', e => {
             bedDragSrcId = b.id;
             e.dataTransfer.effectAllowed = 'move';
-            // Set the drop zone to be the entire row
             setTimeout(() => div.style.opacity = 0.5, 0);
         });
-        div.addEventListener('dragend', () => {
-            div.style.opacity = 1;
-        });
+        div.addEventListener('dragend', () => { div.style.opacity = 1; });
         div.addEventListener('dragover', e => {
             e.preventDefault();
-            // This logic allows you to drag between items, not just onto a list element.
             if(b.id !== bedDragSrcId && e.target.closest('.bed-item') === div) {
                 div.classList.add('over');
             }
         });
-        div.addEventListener('dragleave', () => {
-            div.classList.remove('over');
-        });
+        div.addEventListener('dragleave', () => { div.classList.remove('over'); });
         div.addEventListener('drop', e => {
             e.stopPropagation();
             div.classList.remove('over');
             if (!bedDragSrcId || bedDragSrcId === b.id) return;
-
             const beds = ward.beds;
             const from = beds.findIndex(x => x.id === bedDragSrcId);
             const to   = beds.findIndex(x => x.id === b.id);
-
-            // Move item
             const [movedBed] = beds.splice(from, 1);
-            
-            // To ensure the item isn't re-inserted if we drop exactly where it started
-            if (from !== to) {
-                 beds.splice(to, 0, movedBed);
-            } else {
-                 beds.splice(from, 0, movedBed);
-            }
-
+            if (from !== to) beds.splice(to, 0, movedBed); else beds.splice(from,0,movedBed);
             saveData();
             renderBeds();
         });
 
-        // Bed Name Textarea
+        // Name textarea
         const nameTa = document.createElement('textarea');
         nameTa.className = 'bed-name';
         nameTa.rows = 1;
         nameTa.placeholder = 'Bed Name (e.g., Room 1 Bed A)';
         nameTa.value = b.name;
-
-        // Auto-grow calculation
-        nameTa.onfocus = () => autoGrowTextarea(nameTa);
-        nameTa.onblur = () => autoGrowTextarea(nameTa);
-
         nameTa.oninput = ()=>{
-          b.name = nameTa.value;
-          saveData();
-          renderWards();
-          autoGrowTextarea(nameTa);
+          b.name = nameTa.value; saveData(); renderWards(); autoGrowTextarea(nameTa);
         };
+        nameTa.addEventListener('focus', ()=> autoGrowTextarea(nameTa));
+        nameTa.addEventListener('blur',  ()=> autoGrowTextarea(nameTa));
 
-        // Details Textarea
+        // Details textarea
         const detTa = document.createElement('textarea');
         detTa.rows = 2;
         detTa.placeholder = 'Details (Patient info, Notes...)';
         detTa.value = b.details;
-
-        // Auto-grow calculation
-        detTa.onfocus = () => autoGrowTextarea(detTa);
-        detTa.onblur = () => autoGrowTextarea(detTa);
-
         detTa.oninput = ()=>{
-          b.details = detTa.value;
-          saveData();
-          autoGrowTextarea(detTa);
+          b.details = detTa.value; saveData(); autoGrowTextarea(detTa);
         };
+        detTa.addEventListener('focus', ()=> autoGrowTextarea(detTa));
+        detTa.addEventListener('blur',  ()=> autoGrowTextarea(detTa));
+
+        // Attach wheel/touch forwarding so scrolling main works when over textarea
+        addScrollForwardingHandlers(nameTa);
+        addScrollForwardingHandlers(detTa);
 
         const delBtn = document.createElement('button');
         delBtn.textContent = 'Delete';
@@ -299,12 +330,8 @@
         div.appendChild(delBtn);
         bedList.appendChild(div);
 
-        // Ensure textareas are sized correctly on load
-        // Needs a slight delay for initial sizing in some browsers
-        setTimeout(() => {
-             autoGrowTextarea(nameTa);
-             autoGrowTextarea(detTa);
-        }, 0);
+        // initial sizing
+        setTimeout(()=>{ autoGrowTextarea(nameTa); autoGrowTextarea(detTa); },0);
       });
     }
 
@@ -318,12 +345,9 @@
       if(!ward) return;
       ward.beds.push({ id:uuid(), name:'New Bed', details:'' });
       saveData(); renderBeds(); renderWards();
-      // Focus on the new bed's name field
       setTimeout(()=>{
         const textareas = document.querySelectorAll('#bedList .bed-item textarea.bed-name');
-        if(textareas.length) {
-            textareas[textareas.length-1].focus();
-        }
+        if(textareas.length) textareas[textareas.length-1].focus();
       },0);
     };
 
@@ -336,17 +360,16 @@
     };
     document.getElementById('importBtn').onclick = ()=>document.getElementById('fileInput').click();
     document.getElementById('fileInput').onchange = e=>{
-      const f=e.target.files[0](undefined); if(!f)return; // Fixed syntax error here
-      const r=new FileReader();
-      r.onload=ev=>{
-        const pass=prompt('Import password'); if(pass==null)return;
+      const f = e.target.files[0](undefined); if(!f) return;
+      const r = new FileReader();
+      r.onload = ev => {
+        const pass = prompt('Import password'); if(pass==null) return;
         try {
-          const dec=CryptoJS.AES.decrypt(ev.target.result,pass)
-                         .toString(CryptoJS.enc.Utf8);
-          const obj=JSON.parse(dec);
-          if(!confirm('Overwrite current data?'))return;
-          data=obj; saveData();
-          selectedWardId=null; renderWards(); renderBeds(); alert('Import OK');
+          const dec = CryptoJS.AES.decrypt(ev.target.result,pass).toString(CryptoJS.enc.Utf8);
+          const obj = JSON.parse(dec);
+          if(!confirm('Overwrite current data?')) return;
+          data = obj; saveData();
+          selectedWardId = null; renderWards(); renderBeds(); alert('Import OK');
         } catch(_) {
           alert('Bad password or corrupt file');
         }
@@ -354,12 +377,8 @@
       r.readAsText(f); e.target.value='';
     };
 
-    document.getElementById('toggleSidebarBtn').onclick = ()=>{
-      document.body.classList.add('collapsed');
-    };
-    document.getElementById('expandSidebarBtn').onclick = ()=>{
-      document.body.classList.remove('collapsed');
-    };
+    document.getElementById('toggleSidebarBtn').onclick = ()=> document.body.classList.add('collapsed');
+    document.getElementById('expandSidebarBtn').onclick = ()=> document.body.classList.remove('collapsed');
 
     // Resizer + persist width
     const sidebar = document.getElementById('sidebar');
@@ -392,7 +411,7 @@
     resizer.addEventListener('touchstart',e=>{isResizing=true;},{passive:false});
     document.addEventListener('touchmove',e=>{
       if(!isResizing) return;
-      let x=e.touches[0](undefined).clientX, min=100, max=window.innerWidth-100; // Fixed syntax error here
+      let x = e.touches[0](undefined).clientX, min=100, max=window.innerWidth-100;
       if(x<min)x=min; if(x>max)x=max;
       saveWidth(x);
     },{passive:false});
@@ -402,4 +421,4 @@
   })();
   </script>
 </body>
-</html>
+</html>If you still see the main view not scrolling when you use a trackpad or touchscreen over a textarea, tell me which device/browser you test with and I’ll tighten the touch/wheel handling (some mobile browsers have stricter passive event defaults).
