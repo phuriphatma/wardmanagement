@@ -114,7 +114,7 @@
       <button id="addBedBtn" disabled>+ Add Bed</button>
       <div id="bedList"></div>
     </div>
-    <button id="expandSidebarBtn">&#x25B6;</button>
+    <button id="expandSidebarBtn">&#9776;</button>
   </div>
 
   <script>
@@ -226,7 +226,7 @@
     };
     document.getElementById('importBtn').onclick = ()=>document.getElementById('fileInput').click();
     document.getElementById('fileInput').onchange = e=>{
-      const f=e.target.files[0]; if(!f)return;
+      const f=e.target.files[0](undefined); if(!f)return;
       const r=new FileReader();
       r.onload=ev=>{
         const pass=prompt('Import password'); if(pass==null)return;
@@ -282,7 +282,7 @@
     resizer.addEventListener('touchstart',e=>{isResizing=true;},{passive:false});
     document.addEventListener('touchmove',e=>{
       if(!isResizing) return;
-      let x=e.touches[0].clientX, min=100, max=window.innerWidth-100;
+      let x=e.touches[0](undefined).clientX, min=100, max=window.innerWidth-100;
       if(x<min)x=min; if(x>max)x=max;
       saveWidth(x);
     },{passive:false});
