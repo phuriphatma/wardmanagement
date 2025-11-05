@@ -11,7 +11,7 @@
     #container { display:flex; height:100%; position:relative }
     /* SIDEBAR */
     #sidebar {
-      width: var(--sidebar-width,250px);
+      width:250px;            /* default width */
       min-width:100px; max-width:80%;
       border-right:1px solid #ccc;
       display:flex; flex-direction:column;
@@ -111,20 +111,18 @@
   (function(){
     const STORAGE_KEY = 'wardManagerData';
     const WIDTH_KEY   = 'wardSidebarWidth';
+    let data            = { wards: [] };
+    let selectedWardId  = null;
+    let dragSrcId       = null;
 
-    let data = { wards: [] };
-    let selectedWardId = null;
-    let dragSrcId = null;
-
-    // Load & save
     function saveData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
     function loadData(){
       const js = localStorage.getItem(STORAGE_KEY);
-      if(js) try { data = JSON.parse(js) } catch(e){}
+      if(js) try{ data = JSON.parse(js) }catch{} 
     }
     function uuid(){ return 'x'+Date.now()+Math.floor(Math.random()*1000) }
 
-    // Wards list
+    // Render wards
     function renderWards(){
       const ul = document.getElementById('wardList');
       ul.innerHTML = '';
@@ -133,13 +131,13 @@
         li.textContent = w.name +' ('+ w.beds.length +' beds)';
         if(w.id===selectedWardId) li.classList.add('selected');
         li.onclick = ()=>{
-          selectedWardId = w.id; renderWards(); renderBeds();
+          selectedWardId = w.id;
+          renderWards(); renderBeds();
         };
-        // drag/drop
         li.draggable = true;
-        li.addEventListener('dragstart', e=>{ dragSrcId = w.id });
+        li.addEventListener('dragstart', ()=> dragSrcId = w.id);
         li.addEventListener('dragover', e=>{ e.preventDefault(); li.classList.add('over') });
-        li.addEventListener('dragleave', ()=>li.classList.remove('over'));
+        li.addEventListener('dragleave', ()=> li.classList.remove('over'));
         li.addEventListener('drop', e=>{
           e.stopPropagation(); li.classList.remove('over');
           if(!dragSrcId||dragSrcId===w.id) return;
@@ -153,7 +151,7 @@
       });
     }
 
-    // Beds view
+    // Render beds
     function renderBeds(){
       const bedList = document.getElementById('bedList');
       const title   = document.getElementById('wardTitle');
@@ -177,8 +175,7 @@
         nameInput.value = b.name;
         nameInput.oninput = ()=>{
           b.name = nameInput.value;
-          saveData();
-          renderWards();
+          saveData(); renderWards();
         };
 
         const detTa = document.createElement('textarea');
@@ -196,8 +193,7 @@
           if(!confirm('Delete this bed?')) return;
           ward.beds.splice(i,1);
           saveData();
-          renderBeds();
-          renderWards();
+          renderBeds(); renderWards();
         };
 
         div.appendChild(nameInput);
@@ -214,14 +210,14 @@
       data.wards.push({ id:uuid(), name, beds:[] });
       saveData(); renderWards();
     };
+
     // Add bed
     document.getElementById('addBedBtn').onclick = ()=>{
       const ward = data.wards.find(w=>w.id===selectedWardId);
       if(!ward) return;
       ward.beds.push({ id:uuid(), name:'New Bed', details:'' });
       saveData();
-      renderBeds();
-      renderWards();
+      renderBeds(); renderWards();
       // focus new bed
       setTimeout(()=>{
         const inputs = document.querySelectorAll('#bedList .bed-item input');
@@ -229,11 +225,11 @@
       },0);
     };
 
-    // Export / Import (AES)
+    // Export/Import (AES)
     document.getElementById('exportBtn').onclick = ()=>{
       const pass = prompt('Export password');
       if(pass==null) return;
-      const enc  = CryptoJS.AES.encrypt(JSON.stringify(data),pass).toString();
+      const enc = CryptoJS.AES.encrypt(JSON.stringify(data),pass).toString();
       const blob = new Blob([enc],{type:'text/plain'});
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
@@ -272,35 +268,40 @@
       document.body.classList.remove('collapsed');
     };
 
-    // Resizer + save width
+    // Resizer + persist width
     const sidebar = document.getElementById('sidebar');
     const resizer = document.getElementById('resizer');
     let isResizing = false;
-    // restore
-    const w = localStorage.getItem(WIDTH_KEY);
-    if(w) sidebar.style.setProperty('--sidebar-width', w+'px');
+
+    // restore saved width
+    const savedW = localStorage.getItem(WIDTH_KEY);
+    if(savedW) sidebar.style.width = savedW + 'px';
+
     function saveWidth(x){
-      localStorage.setItem(WIDTH_KEY,x);
-      sidebar.style.setProperty('--sidebar-width', x+'px');
+      localStorage.setItem(WIDTH_KEY, x);
+      sidebar.style.width = x + 'px';
     }
+
     function onMouseMove(e){
       if(!isResizing) return;
       let x = e.clientX;
-      const min=100, max=window.innerWidth-100;
-      if(x<min)x=min; if(x>max)x=max;
+      const min = 100, max = window.innerWidth - 100;
+      if(x<min) x=min; if(x>max) x=max;
       saveWidth(x);
     }
     function onMouseUp(){
+      if(!isResizing) return;
       isResizing = false;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     }
+
     resizer.addEventListener('mousedown', e=>{
       isResizing = true;
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     });
-    // touch
+    // touch events
     resizer.addEventListener('touchstart', e=>{ isResizing = true; },{passive:false});
     document.addEventListener('touchmove', e=>{
       if(!isResizing) return;
@@ -311,7 +312,7 @@
     },{passive:false});
     document.addEventListener('touchend', onMouseUp);
 
-    // Init
+    // init
     loadData();
     renderWards();
     renderBeds();
