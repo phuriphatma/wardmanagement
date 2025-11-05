@@ -8,23 +8,22 @@
   <style>
     * { box-sizing:border-box }
     body,html { margin:0; padding:0; height:100%; font-family:sans-serif; overflow:hidden }
-    #container { display:flex; height:100% }
+    #container { display:flex; height:100%; position:relative }
+    /* SIDEBAR */
     #sidebar {
-      width: var(--sidebar-width, 250px);
+      width: var(--sidebar-width,250px);
       min-width:100px; max-width:80%;
-      border-right:1px solid #ccc; display:flex; flex-direction:column;
+      border-right:1px solid #ccc;
+      display:flex; flex-direction:column;
       overflow:hidden;
     }
     #sidebarHeader {
-      flex:0 0 auto; padding:8px; display:flex; align-items:center;
-      border-bottom:1px solid #ddd; background:#fafafa;
+      padding:8px; border-bottom:1px solid #ddd; background:#fafafa;
     }
     #sidebarHeader button {
-      margin-right:6px; padding:4px 8px;
+      padding:6px 12px;
     }
-    #wardListContainer {
-      flex:1; overflow-y:auto; padding:0 8px;
-    }
+    #wardListContainer { flex:1; overflow-y:auto; padding:8px }
     #wardList { list-style:none; margin:0; padding:0 }
     #wardList li {
       padding:6px; margin:4px 0; border-radius:4px;
@@ -32,26 +31,53 @@
     }
     #wardList li.selected { background:#def }
     #wardList li.over { border:1px dashed #000 }
-    #resizer { width:5px; cursor:col-resize; background:transparent }
+    .controls { margin-top:10px }
+    /* RESIZER + TOGGLE */
+    #resizer {
+      width:5px; cursor:col-resize; position:relative;
+      background:rgba(0,0,0,0.05);
+    }
+    #resizer button {
+      position:absolute; left:-16px; top:10px;
+      width:16px; height:32px;
+      padding:0; line-height:32px;
+      border:1px solid #ccc; background:#fff;
+      border-radius:0 4px 4px 0;
+      cursor:pointer;
+    }
+    /* MAIN */
     #main {
       flex:1; padding:10px; overflow-y:auto;
     }
     #bedList .bed-item {
-      border-bottom:1px solid #eee; padding:8px 0; display:flex; gap:8px; align-items:flex-start;
+      display:flex; align-items:flex-start; gap:8px;
+      border-bottom:1px solid #eee; padding:8px 0;
     }
-    #bedList .bed-item input,
-    #bedList .bed-item textarea {
-      flex:1; padding:4px; border:1px solid #ccc; border-radius:4px;
-      font-size:14px;
+    #bedList input, #bedList textarea {
+      flex:1; font-size:14px;
+      padding:4px; border:1px solid #ccc; border-radius:4px;
     }
-    #bedList .bed-item button {
+    #bedList button {
       flex:0 0 auto;
+      padding:4px 8px;
     }
-    .controls { margin-top:10px }
-    /* collapsed */
+    /* EXPAND BUTTON (when collapsed) */
+    #expandSidebarBtn {
+      position:absolute; left:0; top:50px;
+      width:16px; height:32px;
+      padding:0; line-height:32px;
+      border:1px solid #ccc; background:#fff;
+      border-radius:0 4px 4px 0;
+      cursor:pointer;
+      display:none; z-index:1000;
+    }
+    /* COLLAPSED STATE */
     body.collapsed #sidebar,
     body.collapsed #resizer {
       display:none;
+    }
+    body.collapsed #expandSidebarBtn {
+      display:block;
     }
   </style>
 </head>
@@ -59,8 +85,6 @@
   <div id="container">
     <div id="sidebar">
       <div id="sidebarHeader">
-        <button id="toggleSidebarBtn">«</button>
-        <button id="expandSidebarBtn" style="display:none">»</button>
         <button id="addWardBtn">+ Add Ward</button>
       </div>
       <div id="wardListContainer">
@@ -72,55 +96,53 @@
         </div>
       </div>
     </div>
-    <div id="resizer"></div>
+    <div id="resizer">
+      <button id="toggleSidebarBtn">&#x25C0;</button>
+    </div>
     <div id="main">
       <h2 id="wardTitle">Select a ward</h2>
       <button id="addBedBtn" disabled>+ Add Bed</button>
       <div id="bedList"></div>
     </div>
+    <button id="expandSidebarBtn">&#x25B6;</button>
   </div>
 
   <script>
   (function(){
     const STORAGE_KEY = 'wardManagerData';
     const WIDTH_KEY   = 'wardSidebarWidth';
+
     let data = { wards: [] };
     let selectedWardId = null;
     let dragSrcId = null;
 
-    function saveData() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    }
-    function loadData() {
+    // Load & save
+    function saveData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+    function loadData(){
       const js = localStorage.getItem(STORAGE_KEY);
-      if (js) try { data = JSON.parse(js) } catch(e){}
+      if(js) try { data = JSON.parse(js) } catch(e){}
     }
     function uuid(){ return 'x'+Date.now()+Math.floor(Math.random()*1000) }
 
-    // RENDER WARDS
+    // Wards list
     function renderWards(){
       const ul = document.getElementById('wardList');
       ul.innerHTML = '';
       data.wards.forEach(w=>{
         const li = document.createElement('li');
         li.textContent = w.name +' ('+ w.beds.length +' beds)';
-        if (w.id===selectedWardId) li.classList.add('selected');
+        if(w.id===selectedWardId) li.classList.add('selected');
         li.onclick = ()=>{
-          selectedWardId = w.id;
-          renderWards(); renderBeds();
+          selectedWardId = w.id; renderWards(); renderBeds();
         };
-        // drag & drop
+        // drag/drop
         li.draggable = true;
-        li.addEventListener('dragstart', e=>{
-          dragSrcId = w.id;
-        });
-        li.addEventListener('dragover', e=>{
-          e.preventDefault(); li.classList.add('over');
-        });
+        li.addEventListener('dragstart', e=>{ dragSrcId = w.id });
+        li.addEventListener('dragover', e=>{ e.preventDefault(); li.classList.add('over') });
         li.addEventListener('dragleave', ()=>li.classList.remove('over'));
         li.addEventListener('drop', e=>{
           e.stopPropagation(); li.classList.remove('over');
-          if (!dragSrcId||dragSrcId===w.id) return;
+          if(!dragSrcId||dragSrcId===w.id) return;
           const from = data.wards.findIndex(x=>x.id===dragSrcId);
           const to   = data.wards.findIndex(x=>x.id===w.id);
           const [m]  = data.wards.splice(from,1);
@@ -131,34 +153,34 @@
       });
     }
 
-    // RENDER BEDS
+    // Beds view
     function renderBeds(){
       const bedList = document.getElementById('bedList');
-      const title = document.getElementById('wardTitle');
-      const addBedBtn = document.getElementById('addBedBtn');
+      const title   = document.getElementById('wardTitle');
+      const addBtn  = document.getElementById('addBedBtn');
       bedList.innerHTML = '';
 
       const ward = data.wards.find(w=>w.id===selectedWardId);
-      if (!ward){
+      if(!ward){
         title.textContent = 'Select a ward';
-        addBedBtn.disabled = true;
+        addBtn.disabled = true;
         return;
       }
       title.textContent = 'Ward: '+ward.name;
-      addBedBtn.disabled = false;
+      addBtn.disabled = false;
 
       ward.beds.forEach((b,i)=>{
         const div = document.createElement('div');
         div.className = 'bed-item';
-        // name input
-        const nameIn = document.createElement('input');
-        nameIn.type = 'text'; nameIn.value = b.name;
-        nameIn.placeholder = 'Bed name';
-        nameIn.oninput = ()=>{
-          b.name = nameIn.value;
-          saveData(); renderWards();
+
+        const nameInput = document.createElement('input');
+        nameInput.value = b.name;
+        nameInput.oninput = ()=>{
+          b.name = nameInput.value;
+          saveData();
+          renderWards();
         };
-        // details textarea
+
         const detTa = document.createElement('textarea');
         detTa.rows = 2;
         detTa.placeholder = 'Details…';
@@ -167,69 +189,69 @@
           b.details = detTa.value;
           saveData();
         };
-        // delete button
+
         const delBtn = document.createElement('button');
         delBtn.textContent = 'Delete';
         delBtn.onclick = ()=>{
-          if (!confirm('Delete this bed?')) return;
+          if(!confirm('Delete this bed?')) return;
           ward.beds.splice(i,1);
           saveData();
           renderBeds();
           renderWards();
         };
 
-        div.appendChild(nameIn);
+        div.appendChild(nameInput);
         div.appendChild(detTa);
         div.appendChild(delBtn);
         bedList.appendChild(div);
       });
     }
 
-    // BUTTONS
+    // Add ward
     document.getElementById('addWardBtn').onclick = ()=>{
       const name = prompt('Ward name');
-      if (!name) return;
+      if(!name) return;
       data.wards.push({ id:uuid(), name, beds:[] });
       saveData(); renderWards();
     };
+    // Add bed
     document.getElementById('addBedBtn').onclick = ()=>{
       const ward = data.wards.find(w=>w.id===selectedWardId);
-      if (!ward) return;
-      const newBed = { id:uuid(), name:'New Bed', details:'' };
-      ward.beds.push(newBed);
+      if(!ward) return;
+      ward.beds.push({ id:uuid(), name:'New Bed', details:'' });
       saveData();
       renderBeds();
       renderWards();
-      // focus the newly added bed's name input
+      // focus new bed
       setTimeout(()=>{
         const inputs = document.querySelectorAll('#bedList .bed-item input');
-        if (inputs.length) inputs[inputs.length-1].focus();
+        if(inputs.length) inputs[inputs.length-1].focus();
       },0);
     };
 
-    // EXPORT / IMPORT (unchanged)
+    // Export / Import (AES)
     document.getElementById('exportBtn').onclick = ()=>{
-      const pass = prompt('Password for export');
-      if (pass==null) return;
-      const enc = CryptoJS.AES.encrypt(JSON.stringify(data), pass).toString();
-      const blob = new Blob([enc], {type:'text/plain'});
+      const pass = prompt('Export password');
+      if(pass==null) return;
+      const enc  = CryptoJS.AES.encrypt(JSON.stringify(data),pass).toString();
+      const blob = new Blob([enc],{type:'text/plain'});
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
-      a.href = url; a.download = 'ward-backup.txt'; a.click();
+      a.href=url; a.download='ward-backup.txt'; a.click();
       URL.revokeObjectURL(url);
     };
     document.getElementById('importBtn').onclick = ()=> document.getElementById('fileInput').click();
     document.getElementById('fileInput').onchange = e=>{
-      const f = e.target.files[0]; if (!f) return;
+      const f = e.target.files[0]; if(!f) return;
       const r = new FileReader();
       r.onload = ev=>{
-        const pass = prompt('Password for import');
-        if (pass==null) return;
+        const pass = prompt('Import password');
+        if(pass==null) return;
         try {
-          const dec = CryptoJS.AES.decrypt(ev.target.result, pass)
+          const dec = CryptoJS.AES.decrypt(ev.target.result,pass)
                              .toString(CryptoJS.enc.Utf8);
           const obj = JSON.parse(dec);
-          if (!confirm('Overwrite current data?')) return;
+          if(!confirm('Overwrite current data?')) return;
           data = obj; saveData();
           selectedWardId = null;
           renderWards(); renderBeds();
@@ -242,7 +264,7 @@
       e.target.value = '';
     };
 
-    // SIDEBAR COLLAPSE/EXPAND
+    // Collapse / Expand
     document.getElementById('toggleSidebarBtn').onclick = ()=>{
       document.body.classList.add('collapsed');
     };
@@ -250,52 +272,46 @@
       document.body.classList.remove('collapsed');
     };
 
-    // RESIZER + persist width
+    // Resizer + save width
     const sidebar = document.getElementById('sidebar');
     const resizer = document.getElementById('resizer');
     let isResizing = false;
-
-    // apply saved width
-    const savedW = localStorage.getItem(WIDTH_KEY);
-    if (savedW) sidebar.style.setProperty('--sidebar-width', savedW+'px');
-
-    function saveWidth(px){
-      localStorage.setItem(WIDTH_KEY, px);
-      sidebar.style.setProperty('--sidebar-width', px+'px');
+    // restore
+    const w = localStorage.getItem(WIDTH_KEY);
+    if(w) sidebar.style.setProperty('--sidebar-width', w+'px');
+    function saveWidth(x){
+      localStorage.setItem(WIDTH_KEY,x);
+      sidebar.style.setProperty('--sidebar-width', x+'px');
     }
     function onMouseMove(e){
-      if (!isResizing) return;
+      if(!isResizing) return;
       let x = e.clientX;
-      const min = 100, max = window.innerWidth - 100;
-      if (x<min) x=min; if (x>max) x=max;
+      const min=100, max=window.innerWidth-100;
+      if(x<min)x=min; if(x>max)x=max;
       saveWidth(x);
     }
     function onMouseUp(){
-      if (!isResizing) return;
       isResizing = false;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     }
-
     resizer.addEventListener('mousedown', e=>{
       isResizing = true;
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     });
     // touch
-    resizer.addEventListener('touchstart', e=>{
-      isResizing = true;
-    },{passive:false});
+    resizer.addEventListener('touchstart', e=>{ isResizing = true; },{passive:false});
     document.addEventListener('touchmove', e=>{
-      if (!isResizing) return;
+      if(!isResizing) return;
       let x = e.touches[0].clientX;
-      const min = 100, max = window.innerWidth - 100;
-      if (x<min) x=min; if (x>max) x=max;
+      const min=100, max=window.innerWidth-100;
+      if(x<min)x=min; if(x>max)x=max;
       saveWidth(x);
     },{passive:false});
     document.addEventListener('touchend', onMouseUp);
 
-    // INIT
+    // Init
     loadData();
     renderWards();
     renderBeds();
