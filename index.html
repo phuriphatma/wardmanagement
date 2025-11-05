@@ -72,7 +72,6 @@
         border-bottom: 1px solid #eee;
     }
 
-
     #bedList textarea {
       width:100%; font-size:14px;
       padding:6px; border:1px solid #ccc; border-radius:4px;
@@ -86,7 +85,6 @@
         padding-top: 3px;
         border: 1px solid #ccc;
     }
-
 
     #bedList button {
       align-self:flex-start;
@@ -146,7 +144,7 @@
     const STORAGE_KEY = 'wardManagerData';
     const WIDTH_KEY   = 'wardSidebarWidth';
     let data           = { wards: [] };
-    let selectedWardId = null, dragSrcId = null, bedDragSrcId = null; 
+    let selectedWardId = null, dragSrcId = null, bedDragSrcId = null;
 
     function saveData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
     function loadData(){
@@ -162,7 +160,6 @@
         // We use min-height defined in CSS to handle the initial small size.
         element.style.height = element.scrollHeight + 'px';
     }
-
 
     function renderWards(){
       const ul = document.getElementById('wardList'); ul.innerHTML = '';
@@ -217,18 +214,18 @@
             bedDragSrcId = b.id;
             e.dataTransfer.effectAllowed = 'move';
             // Set the drop zone to be the entire row
-            setTimeout(() => div.style.opacity = 0.5, 0); 
+            setTimeout(() => div.style.opacity = 0.5, 0);
         });
         div.addEventListener('dragend', () => {
             div.style.opacity = 1;
         });
-        div.addEventListener('dragover', e => { 
-            e.preventDefault(); 
+        div.addEventListener('dragover', e => {
+            e.preventDefault();
             // Avoid dragging onto itself
             if(b.id !== bedDragSrcId) div.classList.add('over');
         });
-        div.addEventListener('dragleave', () => { 
-            div.classList.remove('over'); 
+        div.addEventListener('dragleave', () => {
+            div.classList.remove('over');
         });
         div.addEventListener('drop', e => {
             e.stopPropagation();
@@ -238,7 +235,7 @@
             const beds = ward.beds;
             const from = beds.findIndex(x => x.id === bedDragSrcId);
             const to   = beds.findIndex(x => x.id === b.id);
-            
+
             // Move item
             const [movedBed] = beds.splice(from, 1);
             beds.splice(to, 0, movedBed);
@@ -250,24 +247,24 @@
         // Bed Name Textarea (Now allowing multi-line expansion)
         const nameTa = document.createElement('textarea');
         nameTa.className = 'bed-name';
-        nameTa.rows = 1; 
-        nameTa.placeholder = 'Bed Name (e.g., Room 1 Bed A)'; 
+        nameTa.rows = 1;
+        nameTa.placeholder = 'Bed Name (e.g., Room 1 Bed A)';
         nameTa.value = b.name;
-        
+
         // Initial auto-grow calculation
         nameTa.onfocus = () => autoGrowTextarea(nameTa);
         nameTa.onblur = () => autoGrowTextarea(nameTa);
 
         nameTa.oninput = ()=>{
-          b.name = nameTa.value; 
-          saveData(); 
+          b.name = nameTa.value;
+          saveData();
           renderWards();
           autoGrowTextarea(nameTa);
         };
 
         const detTa = document.createElement('textarea');
-        detTa.rows = 2; 
-        detTa.placeholder = 'Details (Patient info, Notes...)'; 
+        detTa.rows = 2;
+        detTa.placeholder = 'Details (Patient info, Notes...)';
         detTa.value = b.details;
 
         // Initial auto-grow calculation
@@ -275,9 +272,9 @@
         detTa.onblur = () => autoGrowTextarea(detTa);
 
         detTa.oninput = ()=>{
-          b.details = detTa.value; 
+          b.details = detTa.value;
           saveData();
-          autoGrowTextarea(detTa); 
+          autoGrowTextarea(detTa);
         };
 
         const delBtn = document.createElement('button');
@@ -292,7 +289,7 @@
         div.appendChild(detTa);
         div.appendChild(delBtn);
         bedList.appendChild(div);
-        
+
         // Ensure textareas are sized correctly on load
         autoGrowTextarea(nameTa);
         autoGrowTextarea(detTa);
@@ -392,4 +389,3 @@
   </script>
 </body>
 </html>
-```
