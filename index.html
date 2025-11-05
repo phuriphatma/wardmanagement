@@ -9,6 +9,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <style>
+  #profilePage {
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from {opacity: 0; transform: translateX(20px);}
+  to {opacity: 1; transform: translateX(0);}
+}
+
 *{box-sizing:border-box;font-family:'Inter',sans-serif}
 body,html{margin:0;padding:0;height:100%;overflow:hidden}
 #container{display:flex;height:100%;position:relative}
@@ -25,21 +33,30 @@ border-bottom:1px solid #ddd;cursor:pointer}
 #wardList li{padding:6px;margin:4px 0;border-radius:4px;cursor:pointer;user-select:none;border:1px solid transparent}
 #wardList li.selected{background:#def}
 #wardList li.over{border:1px dashed #000}
+#wardList li{position:relative}
+#wardList li .ward-delete{position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;pointer-events:none;transition:opacity .15s;background:#fee;color:#900;border:1px solid #c00;border-radius:3px;padding:2px 6px;font-size:12px;line-height:1}
+body.edit-wards #wardList li .ward-delete{opacity:1;pointer-events:auto}
 .controls{margin-top:10px}
 
 /* Resizer */
-#resizer{width:5px;cursor:col-resize;background:rgba(0,0,0,0.05)}
+#resizer {
+  width: 8px;
+  cursor: col-resize;
+  background: rgba(0, 0, 0, 0.05);
+}
 
 /* Main area */
 #main{flex:1;display:flex;flex-direction:row;overflow:hidden}
 #bedContainer{flex:1;padding:10px;overflow-y:auto;scroll-behavior:smooth;border-right:1px solid #eee}
-#bedList .bed-item{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #eee;padding:8px 0;cursor:grab}
+#bedList .bed-item{display:flex;flex-direction:row;align-items:center;gap:8px;border-bottom:1px solid #eee;padding:8px 0;cursor:grab}
 #bedList .bed-item.over{border-top:3px solid #007bff;padding-top:5px}
-#bedList textarea{width:100%;font-size:14px;padding:6px;border:1px solid #ccc;border-radius:4px;
-resize:vertical;min-height:28px;overflow:hidden}
-#bedList .bed-name{font-weight:bold;font-size:16px}
-#bedList button{align-self:flex-start;padding:6px 12px;border:1px solid #c00;
-background:#fee;color:#900;border-radius:4px;cursor:pointer}
+#bedList .bed-text{flex:1;display:flex;flex-direction:column;gap:4px}
+#bedList .bed-text .line1{font-weight:600;font-size:16px}
+#bedList .bed-text .line2{font-size:13px;color:#555}
+#bedList .actions-row{display:flex;gap:8px}
+#bedList .actions-row button{padding:6px 12px;border-radius:4px;cursor:pointer;border:1px solid #ccc;background:#fff}
+#bedList .actions-row .delete{border-color:#c00;background:#fee;color:#900}
+#bedList .bed-text .line2{white-space:pre-wrap}
 
 /* Profile panel */
 #profilePanel{width:360px;max-width:100%;padding:16px;overflow-y:auto;display:none;background:#f9fafb}
@@ -56,15 +73,172 @@ background:#fee;color:#900;border-radius:4px;cursor:pointer}
 padding:0;line-height:32px;text-align:center;border:1px solid #ccc;background:#fff;
 border-radius:0 4px 4px 0;cursor:pointer;display:none;z-index:1000;font-size:18px}
 body.collapsed #sidebar,body.collapsed #resizer{display:none}
-body.collapsed #expandSidebarBtn{display:block}
+/* Hide the sidebar indicator when collapsed */
+body.collapsed #expandSidebarBtn{display:none}
+
+
+/* Modal overlay */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+/* Modal content box */
+.modal-content {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  width: 90%;
+  max-width: 420px;
+  max-height: 90%;
+  overflow-y: auto;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.modal h2 { margin-top: 0; }
+.modal label { display:block; margin:8px 0; font-weight:600; }
+.modal input, .modal textarea {
+  width:100%; padding:8px; border:1px solid #ccc;
+  border-radius:4px; font-size:14px;
+}
+.modal .actions {
+  margin-top:12px; display:flex; justify-content:flex-end; gap:8px;
+}
+.modal button {
+  padding:8px 14px; border-radius:4px; cursor:pointer;
+  border:1px solid #888; background:#f2f2f2;
+}
+.modal button.save-btn {
+  background:#007bff; color:white; border-color:#007bff;
+}
+  /* Notify editor (scoped to #profilePage) */
+  #profilePage {
+    --bg: #0b1020;
+    --card: #12182b;
+    --text: #e8ecf1;
+    --muted: #a9b2c0;
+    --accent: #5b9cff;
+    --good: #3ecf8e;
+    --bad: #ff6b6b;
+    --border: #22304a;
+    color: var(--text);
+    background: radial-gradient(1200px 800px at 80% -10%, #1a2652 0%, rgba(26,38,82,0) 60%), var(--bg);
+  }
+  #profilePage .layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  #profilePage .col { min-width: 0; }
+  #profilePage header { padding: 0 0 8px; }
+  #profilePage header h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+  #profilePage header .sub { color: var(--muted); font-size: 13px; }
+  #profilePage main { max-width: 920px; margin: 0 auto 20px; padding: 0; }
+  #profilePage .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.00));
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin: 16px 0;
+  }
+  #profilePage .card h2 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
+  #profilePage label { display: block; font-size: 13px; color: var(--muted); margin: 8px 12px 8px 0; }
+  #profilePage select { width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 10px; background: #0f1527; color: var(--text); border: 1px solid #1e2a44; }
+  #profilePage input, #profilePage textarea {
+    width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 10px;
+    background: #0f1527; color: var(--text); border: 1px solid #1e2a44; outline: none;
+  }
+  #profilePage textarea#hashtags { min-height: 160px; }
+  #profilePage textarea#cli { min-height: 220px; }
+  #profilePage textarea#mx { min-height: 100px; }
+  #profilePage input:focus, #profilePage textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,156,255,0.15); }
+  #profilePage .row { display: flex; gap: 12px; align-items: center; }
+  #profilePage .row.between { justify-content: space-between; }
+  #profilePage .grid.vs { display: grid; grid-template-columns: repeat(5, minmax(80px, 1fr)); gap: 12px; }
+  #profilePage .tag { font-weight: 600; color: var(--muted); }
+  #profilePage .add { background: #183157; color: #dbe7ff; border: 1px solid #274a86; }
+  #profilePage button {
+    appearance: none; border: 1px solid var(--border); background: #131b31; color: var(--text);
+    padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600;
+  }
+  #profilePage button.ghost { background: transparent; color: var(--muted); }
+  #profilePage button:active { transform: translateY(1px); }
+  #profilePage .io-line { display: grid; grid-template-columns: 1fr 160px 110px auto; gap: 10px; align-items: center; margin: 6px 0; }
+  #profilePage .io-line input.kind { width: 100%; }
+  #profilePage .io-line input.display { width: 100%; }
+  #profilePage .io-line input.amount { width: 100%; }
+  #profilePage .io-line .remove { background: #2a2236; border: 1px solid #45345c; color: #f1e6ff; }
+  #profilePage .totals { margin-top: 8px; color: var(--muted); font-size: 13px; }
+  #profilePage .totals .net { color: var(--good); }
+  #profilePage .totals .neg { color: var(--bad); }
+  #profilePage .override { margin: 8px 0; padding: 8px; border: 1px dashed #2a3a5a; border-radius: 10px; background: rgba(20,30,55,0.4); }
+  #profilePage .override .row label { flex: 1; }
+  #profilePage .actions { display: flex; gap: 10px; justify-content: flex-end; margin: 20px 0; }
+  #profilePage .preview { background: #0d1427; border: 1px dashed #22304a; border-radius: 12px; padding: 14px; white-space: pre-wrap; min-height: 140px; }
+  #profilePage .io-card.morning { border-color: rgba(91,156,255,0.55); box-shadow: 0 0 0 1px rgba(91,156,255,0.10) inset; }
+  #profilePage .io-card.morning h2 { color: #bcd6ff; }
+  #profilePage .io-card.afternoon { border-color: rgba(62,207,142,0.55); box-shadow: 0 0 0 1px rgba(62,207,142,0.10) inset; }
+  #profilePage .io-card.afternoon h2 { color: #baf3d2; }
+  @media (max-width: 720px) { #profilePage .grid.vs { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 720px) {
+    #profilePage .io-line { grid-template-columns: 1fr 1fr; }
+    #profilePage .io-line input.kind { grid-column: 1 / -1; }
+    #profilePage .io-line input.display { grid-column: 1 / 2; }
+    #profilePage .io-line input.amount { grid-column: 2 / 3; }
+    #profilePage .io-line .remove { grid-column: 1 / -1; justify-self: end; }
+  }
+
+  /* Mobile sticky preview bottom sheet (scoped) */
+  #profilePage .mobile-preview-sheet {
+    position: fixed; left: 250px; right: 0; bottom: 0; height: 50vh;
+    background: #0d1427; border-top: 1px solid var(--border);
+    box-shadow: 0 -12px 30px rgba(0,0,0,0.35);
+    transform: translateY(100%);
+    transition: transform 0.25s ease; z-index: 1002;
+    display: flex; flex-direction: column;
+  }
+  body.collapsed #profilePage .mobile-preview-sheet { left: 0; }
+  #profilePage .mobile-preview-sheet.open { transform: translateY(0); }
+  #profilePage .mobile-preview-sheet .sheet-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  #profilePage .mobile-preview-sheet .sheet-header .grabber{ width: 42px; height: 6px; background: #2a3a5a; border-radius: 3px; margin-right: 8px; cursor: ns-resize; }
+  #profilePage .mobile-preview-sheet .title { font-weight: 600; color: var(--muted); }
+  #profilePage .mobile-preview-sheet .sheet-actions { display: flex; gap: 8px; }
+  #profilePage .mobile-preview-sheet .sheet-body { padding: 10px 12px; overflow: auto; display:flex; min-height: 0; }
+  #profilePage .fab-preview { position: fixed; right: 16px; bottom: 16px; z-index: 1003; padding: 10px 14px; background: var(--accent); border: 0; color: #03122b; font-weight: 700; border-radius: 22px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+  #profilePage .fab-reset { position: fixed; left: 280px; bottom: 16px; z-index: 1003; padding: 10px 14px; background: #ff7676; border: 0; color: #2b0202; font-weight: 700; border-radius: 22px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+  body.collapsed #profilePage .fab-reset { left: 16px; }
+  #profilePage pre.preview{ flex:1; height: 100%; min-height: 100%; }
+  /* Make the built-in back button stick with the Quick Ward Note content */
+  #profilePage #backToBedsBtn{ position: sticky; top: 12px; align-self: flex-start; z-index: 3; }
+  @media (max-width: 979px){
+    #profilePage .mobile-preview-sheet { left: 0 !important; }
+    #profilePage .fab-reset { left: 16px; }
+  }
 </style>
 </head>
 <body>
 <div id="container">
   <div id="sidebar">
     <div id="sidebarHeader">
-      <button id="toggleSidebarBtn">&#9776;</button>
       <button id="addWardBtn">+ Add Ward</button>
+      <button id="editWardsBtn">Edit Wards</button>
+      <button id="presetsBtn">Presets</button>
+      <!-- Compact Profiles control -->
+      <div id="profilesMenu" style="position:relative; margin-left:auto;">
+        <button id="profileMenuBtn" class="ghost" style="border:1px solid #ddd; padding:6px 10px; border-radius:6px;">Profile</button>
+        <div id="profileMenuPanel" style="display:none; position:absolute; right:0; top:100%; margin-top:6px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,0.1); width:280px; max-height:60vh; overflow:auto; z-index:50;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #eee;">
+            <strong>Profiles</strong>
+            <button id="closeProfilePanel" class="ghost" title="Close">×</button>
+          </div>
+          <ul id="profileList" style="list-style:none; margin:0; padding:6px 0;"></ul>
+          <div style="display:flex; gap:6px; padding:10px 12px; border-top:1px solid #eee; position:sticky; bottom:0; background:#fff;">
+            <button id="profNewBtn" title="New profile">New</button>
+            <button id="profDupBtn" title="Duplicate current">Dup</button>
+            <button id="profRenBtn" title="Rename">Ren</button>
+            <button id="profDelBtn" title="Delete" class="delete">Del</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div id="wardListContainer">
       <ul id="wardList"></ul>
@@ -82,27 +256,225 @@ body.collapsed #expandSidebarBtn{display:block}
       <button id="addBedBtn" disabled>+ Add Bed</button>
       <div id="bedList"></div>
     </div>
-    <div id="profilePanel">
-      <h2>Patient Profile</h2>
-      <div class="row">
-        <label>Bed/Room<input id="profileBed" placeholder="e.g., 6/1 รวม3"></label>
-        <label>Name<input id="profileName" placeholder="e.g., อัครเดช"></label>
+
+    <div id="profilePage" style="display:none;flex-direction:column;padding:16px;overflow-y:auto;width:100%;">
+      <button id="backToBedsBtn" style="margin-bottom:12px;">← Back to Beds</button>
+    <header>
+      <h1>Quick Ward Note</h1>
+      <div class="sub">Fast template for bedside updates</div>
+    </header>
+
+    <main>
+      <div class="layout">
+        <div class="col col-form">
+          <section class="card">
+            <h2>Patient</h2>
+            <div class="row">
+              <label>Bed/Room
+                <input id="bed" placeholder="e.g., กว6/1 รวม3 — ชื่อผู้ป่วย" />
+              </label>
+            </div>
+            <label>Hashtags / Dx (multiline)
+              <textarea id="hashtags" rows="6" placeholder="CCA c HCV cirrhosis S/P Rt. hepatectomy&#10;U/D HT"></textarea>
+            </label>
+          </section>
+
+          <section class="card">
+            <h2>Clinical (Cli)</h2>
+            <textarea id="cli" rows="8" placeholder="สรุปอาการ: ..."></textarea>
+          </section>
+
+          <section class="card">
+            <h2>Mx</h2>
+            <textarea id="mx" rows="3" placeholder="แผนการรักษา / Management..."></textarea>
+          </section>
+
+          <section class="card">
+            <h2>V/S</h2>
+            <div class="grid vs">
+              <label>BT <input id="bt" inputmode="decimal" placeholder="36.9" /></label>
+              <label>PR <input id="pr" inputmode="numeric" placeholder="74" /></label>
+              <label>RR <input id="rr" inputmode="numeric" placeholder="18" /></label>
+              <label>BP <input id="bp" placeholder="143/75" /></label>
+              <label>O2sat <input id="o2" inputmode="numeric" placeholder="96%" /></label>
+            </div>
+          </section>
+
+          <section class="card io-card morning">
+            <h2>I/O เช้า</h2>
+            <div class="io-block" data-block="morning">
+              <div class="row between"><div class="tag">I</div><button type="button" class="add add-in">+ Add</button></div>
+              <div class="lines in"></div>
+              <div class="row between"><div class="tag">O</div><button type="button" class="add add-out">+ Add</button></div>
+              <div class="lines out"></div>
+              <div class="override">
+                <div class="tag">Override totals (optional)</div>
+                <div class="row">
+                  <label>I <input class="override-in" inputmode="decimal" placeholder="e.g., 1960" /></label>
+                  <label>O <input class="override-out" inputmode="decimal" placeholder="e.g., 1300" /></label>
+                </div>
+              </div>
+              <div class="totals">Total: <span class="sum-in">0</span>/<span class="sum-out">0</span> (<span class="net">0</span>)</div>
+            </div>
+          </section>
+
+          <section class="card io-card afternoon">
+            <h2>I/O บ่าย</h2>
+            <div class="io-block" data-block="afternoon">
+              <div class="row between"><div class="tag">I</div><button type="button" class="add add-in">+ Add</button></div>
+              <div class="lines in"></div>
+              <div class="row between"><div class="tag">O</div><button type="button" class="add add-out">+ Add</button></div>
+              <div class="lines out"></div>
+              <div class="override">
+                <div class="tag">Override totals (optional)</div>
+                <div class="row">
+                  <label>I <input class="override-in" inputmode="decimal" placeholder="e.g., 1242" /></label>
+                  <label>O <input class="override-out" inputmode="decimal" placeholder="e.g., 1180" /></label>
+                </div>
+              </div>
+              <div class="totals">Total: <span class="sum-in">0</span>/<span class="sum-out">0</span> (<span class="net">0</span>)</div>
+            </div>
+          </section>
+
+          <section class="actions">
+            <button id="copy">Copy</button>
+            <button id="saveProfileBtn" class="save-btn" style="background:#007bff;color:white;border:none;">Save</button>
+          </section>
+        </div>
       </div>
-      <label>Hashtags / Dx<textarea id="profileDx" rows="5" placeholder="CCA c HCV cirrhosis&#10;U/D HT"></textarea></label>
-      <label>Notes<textarea id="profileNote" rows="6" placeholder="Progress note..."></textarea></label>
+    </main>
+
+    <!-- Mobile sticky preview bottom sheet -->
+    <div id="mobilePreviewSheet" class="mobile-preview-sheet">
+      <div class="sheet-header">
+        <div class="grabber" id="sheetGrabber"></div>
+        <div class="title">Preview</div>
+        <div class="sheet-actions">
+          <button id="copyMobile">Copy</button>
+          <button id="closeSheet" class="ghost">Close</button>
+        </div>
+      </div>
+      <div id="mobilePreviewBody" class="sheet-body">
+        <pre id="output" class="preview" contenteditable="true" spellcheck="false"></pre>
+      </div>
+    </div>
+
+    <!-- Floating toggle for mobile -->
+    <button id="togglePreview" class="fab-preview">Preview</button>
+    <button id="resetFab" class="fab-reset">Reset</button>
     </div>
   </div>
+  
+  
+  </div>
   <button id="expandSidebarBtn">&#9776;</button>
+</div>
+
+<!-- Presets Modal -->
+<div id="presetsModal" class="modal">
+  <div class="modal-content">
+    <h2>Ward Presets</h2>
+    <label>Preset name
+      <input id="presetName" placeholder="e.g., Surgery" />
+    </label>
+    <label>Ward names (one per line)
+      <textarea id="presetWards" rows="8" placeholder="3ก\nกว\n...\n"></textarea>
+    </label>
+    <div class="row" style="gap:8px; align-items:center;">
+      <label style="flex:1">Existing presets
+        <select id="presetSelect"></select>
+      </label>
+      <button id="loadPresetBtn">Load</button>
+      <button id="deletePresetBtn" class="save-btn" style="background:#ff7676">Delete</button>
+    </div>
+    <div class="actions">
+      <button id="closePresetBtn">Close</button>
+      <button id="savePresetBtn" class="save-btn">Save Preset</button>
+      <button id="applyPresetBtn" class="save-btn">Apply Preset</button>
+    </div>
+  </div>
+  
 </div>
 
 <script>
 (function(){
 const STORAGE_KEY='wardManagerData';
-const WIDTH_KEY='wardSidebarWidth';
+const WARD_WIDTH_KEY='wardSidebarWidth'; // renamed to avoid redeclare
+const PROFILES_KEY='wardManagerProfiles-v1';
 let data={wards:[]},selectedWardId=null,selectedBedId=null,dragSrcId=null,bedDragSrcId=null;
 
-function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data))}
+// Profiles store shape: { current: string, map: { [id]: { id, name, data } } }
+let profileStore={ current: null, map:{} };
+let currentProfileId=null;
+function deepClone(o){ return JSON.parse(JSON.stringify(o||{})); }
+function saveProfiles(){
+  if(!currentProfileId){ return; }
+  // persist current working data into store before saving
+  if(profileStore.map[currentProfileId]){
+    profileStore.map[currentProfileId].data = deepClone(data);
+  }
+  try{ localStorage.setItem(PROFILES_KEY, JSON.stringify(profileStore)); }catch{}
+  // keep legacy key for compatibility (exports etc.)
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch{}
+}
+function loadProfiles(){
+  const raw=localStorage.getItem(PROFILES_KEY);
+  if(raw){
+    try{ profileStore = JSON.parse(raw)||{current:null,map:{}}; }catch{ profileStore={current:null,map:{}}; }
+  }
+  if(!profileStore || !profileStore.current || !profileStore.map || Object.keys(profileStore.map).length===0){
+    // seed from legacy STORAGE_KEY if present
+    let legacy={wards:[]};
+    try{ const js=localStorage.getItem(STORAGE_KEY); if(js) legacy=JSON.parse(js)||{wards:[]}; }catch{}
+    const pid='p'+Date.now();
+    profileStore={ current: pid, map: { } };
+    profileStore.map[pid]={ id: pid, name: 'Default', data: deepClone(legacy) };
+  }
+  currentProfileId = profileStore.current;
+  const cur = profileStore.map[currentProfileId];
+  data = deepClone(cur?.data)||{wards:[]};
+}
+function switchProfile(pid){
+  if(pid===currentProfileId) return;
+  // save current first
+  saveProfiles();
+  // switch
+  currentProfileId = pid;
+  profileStore.current = pid;
+  const cur=profileStore.map[pid];
+  data = deepClone(cur?.data)||{wards:[]};
+  selectedWardId=null; selectedBedId=null;
+  refreshProfileUI();
+  renderWards(); renderBeds(); backToBeds();
+  saveProfiles();
+}
+function saveData(){
+  // write into current profile and persist
+  if(currentProfileId && profileStore.map[currentProfileId]){
+    profileStore.map[currentProfileId].data = deepClone(data);
+  }
+  saveProfiles();
+}
+// Legacy direct loader (unused now)
 function loadData(){const js=localStorage.getItem(STORAGE_KEY);if(js)try{data=JSON.parse(js)}catch{}}
+function refreshProfileUI(){
+  const btn=document.getElementById('profileMenuBtn');
+  const list=document.getElementById('profileList');
+  const cur=profileStore.map[currentProfileId];
+  if(btn){ btn.textContent = cur ? `Profile: ${cur.name}` : 'Profile'; }
+  if(list){
+    list.innerHTML='';
+    Object.values(profileStore.map).forEach(p=>{
+      const li=document.createElement('li');
+      li.textContent=p.name||p.id;
+      li.style.padding='8px 12px';
+      li.style.cursor='pointer';
+      if(p.id===currentProfileId){ li.style.fontWeight='600'; li.style.background='#f5f5f5'; }
+      li.addEventListener('click', ()=>{ switchProfile(p.id); closeProfilePanel(); });
+      list.appendChild(li);
+    });
+  }
+}
 function uuid(){return 'x'+Date.now()+Math.floor(Math.random()*1000)}
 function autoGrow(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}
 
@@ -112,7 +484,7 @@ function renderWards(){
     const li=document.createElement('li');
     li.textContent=w.name+' ('+w.beds.length+' beds)';
     if(w.id===selectedWardId)li.classList.add('selected');
-    li.onclick=()=>{selectedWardId=w.id;selectedBedId=null;renderWards();renderBeds();hideProfile();};
+    li.onclick=()=>{selectedWardId=w.id;selectedBedId=null;renderWards();renderBeds(); backToBeds();};
     li.draggable=true;
     li.addEventListener('dragstart',e=>{dragSrcId=w.id;e.dataTransfer.effectAllowed='move';});
     li.addEventListener('dragover',e=>{e.preventDefault();li.classList.add('over')});
@@ -125,6 +497,19 @@ function renderWards(){
       const [m]=data.wards.splice(from,1);data.wards.splice(to,0,m);
       saveData();renderWards();
     });
+    // inline delete that doesn't take extra space
+    const del=document.createElement('button');
+    del.className='ward-delete';
+    del.textContent='×';
+    del.title='Delete ward';
+    del.onclick=(ev)=>{
+      ev.stopPropagation();
+      if(!confirm('Delete this ward?')) return;
+      const idx=data.wards.findIndex(x=>x.id===w.id);
+      if(idx>-1){ data.wards.splice(idx,1); saveData(); if(selectedWardId===w.id) selectedWardId=null; renderWards(); renderBeds(); }
+    };
+    li.appendChild(del);
+    // remove long-press delete; overlay button handles deletion
     ul.appendChild(li);
   });
 }
@@ -141,7 +526,7 @@ function renderBeds(){
     const div=document.createElement('div');
     div.className='bed-item';div.draggable=true;
     div.setAttribute('data-bed-id',b.id);
-    div.addEventListener('click',()=>showProfile(b));
+
     div.addEventListener('dragstart',e=>{bedDragSrcId=b.id;e.dataTransfer.effectAllowed='move';setTimeout(()=>div.style.opacity=0.5,0);});
     div.addEventListener('dragend',()=>{div.style.opacity=1;});
     div.addEventListener('dragover',e=>{e.preventDefault();if(b.id!==bedDragSrcId)div.classList.add('over');});
@@ -157,56 +542,125 @@ function renderBeds(){
       saveData();renderBeds();
     });
 
-    const nameTa=document.createElement('textarea');
-    nameTa.className='bed-name';
-    nameTa.placeholder='Bed Name';nameTa.value=b.name||'';
-    nameTa.oninput=()=>{b.name=nameTa.value;saveData();renderWards();autoGrow(nameTa);}
+    // static bed display: ward/bed on first line, diagnosis hashtags on second line
+    const textDiv=document.createElement('div');
+    textDiv.className='bed-text';
+    const line1=document.createElement('div');
+    line1.className='line1';
+    const line2=document.createElement('div');
+    line2.className='line2';
+    // compute ward/bed header
+    const wardName = ward.name || '';
+    const bedName = b.name || '';
+    const header = wardName ? (wardName.includes('/') ? `${wardName} ${bedName}`.trim() : `${wardName}/${bedName}`.trim()) : bedName;
+    line1.textContent = header;
+    // compute diagnosis hashtags from bed.details
+    let dxText='';
+    try{ const d=JSON.parse(b.details||'{}'); const raw=(d.dx||d.hashtags||'');
+      if(raw){ dxText = raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=> s.startsWith('#')? s : `#${s}`).join('\n'); }
+    }catch{}
+    line2.textContent = dxText;
+    textDiv.appendChild(line1);
+    textDiv.appendChild(line2);
+    const actions=document.createElement('div');
+    actions.className='actions-row';
+    const editBtn=document.createElement('button');
+    editBtn.textContent='Edit';
+    editBtn.onclick=(e)=>{ e.stopPropagation(); openProfilePage(b); };
     const delBtn=document.createElement('button');
+    delBtn.className='delete';
     delBtn.textContent='Delete';
     delBtn.onclick=()=>{if(!confirm('Delete this bed?'))return;
       ward.beds.splice(i,1);saveData();renderBeds();renderWards();};
-    div.appendChild(nameTa);
-    div.appendChild(delBtn);
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    div.appendChild(textDiv);
+    div.appendChild(actions);
     bedList.appendChild(div);
-    setTimeout(()=>autoGrow(nameTa),0);
   });
 }
 
-function showProfile(b){
-  selectedBedId=b.id;
-  const panel=document.getElementById('profilePanel');
-  panel.classList.add('active');
-  document.getElementById('profileBed').value=b.name||'';
-  const d=JSON.parse(b.details||'{}');
-  document.getElementById('profileName').value=d.name||'';
-  document.getElementById('profileDx').value=d.dx||'';
-  document.getElementById('profileNote').value=d.note||'';
-}
-
-function hideProfile(){document.getElementById('profilePanel').classList.remove('active');}
-
-['profileBed','profileName','profileDx','profileNote'].forEach(id=>{
-  document.getElementById(id).addEventListener('input',()=>{
-    const ward=data.wards.find(w=>w.id===selectedWardId);
-    if(!ward)return;
-    const bed=ward.beds.find(x=>x.id===selectedBedId);
-    if(!bed)return;
-    const d={
-      name:document.getElementById('profileName').value,
-      dx:document.getElementById('profileDx').value,
-      note:document.getElementById('profileNote').value
-    };
-    bed.name=document.getElementById('profileBed').value;
-    bed.details=JSON.stringify(d);
-    saveData();renderWards();renderBeds();
-  });
-});
+// legacy profile panel functions removed
 
 document.getElementById('addWardBtn').onclick=()=>{
   const name=prompt('Ward name');if(!name)return;
   data.wards.push({id:uuid(),name,beds:[]});
   saveData();renderWards();
 };
+const editWardsBtn=document.getElementById('editWardsBtn');
+let wardsEditMode=false;
+try{ wardsEditMode = JSON.parse(localStorage.getItem('wardsEditMode')||'false'); }catch{}
+function applyWardsEditMode(){
+  document.body.classList.toggle('edit-wards', !!wardsEditMode);
+  if(editWardsBtn) editWardsBtn.textContent = wardsEditMode ? 'Done' : 'Edit Wards';
+}
+applyWardsEditMode();
+editWardsBtn.onclick=()=>{ wardsEditMode=!wardsEditMode; localStorage.setItem('wardsEditMode', JSON.stringify(wardsEditMode)); applyWardsEditMode(); };
+const PRESETS_KEY='wardPresets-v1';
+let presets={};
+function loadPresets(){ try{ const raw=localStorage.getItem(PRESETS_KEY); if(raw) presets=JSON.parse(raw)||{}; }catch{ presets={}; } }
+function savePresets(){ try{ localStorage.setItem(PRESETS_KEY, JSON.stringify(presets)); }catch{} }
+function refreshPresetSelect(){ const sel=document.getElementById('presetSelect'); if(!sel) return; sel.innerHTML=''; const names=Object.keys(presets).sort(); names.forEach(n=>{ const opt=document.createElement('option'); opt.value=n; opt.textContent=n; sel.appendChild(opt); }); }
+loadPresets();
+
+const presetsBtn=document.getElementById('presetsBtn');
+const presetsModal=document.getElementById('presetsModal');
+const closePresetBtn=document.getElementById('closePresetBtn');
+const savePresetBtn=document.getElementById('savePresetBtn');
+const applyPresetBtn=document.getElementById('applyPresetBtn');
+const loadPresetBtn=document.getElementById('loadPresetBtn');
+const deletePresetBtn=document.getElementById('deletePresetBtn');
+const presetNameInput=document.getElementById('presetName');
+const presetWardsTa=document.getElementById('presetWards');
+const presetSelect=document.getElementById('presetSelect');
+
+function openPresets(){ presetsModal.style.display='flex'; refreshPresetSelect(); }
+function closePresets(){ presetsModal.style.display='none'; }
+presetsBtn.onclick=openPresets;
+closePresetBtn.onclick=closePresets;
+presetsModal.addEventListener('click',(e)=>{ if(e.target===presetsModal) closePresets(); });
+
+loadPresetBtn.onclick=()=>{ const n=presetSelect.value; if(!n||!presets[n]) return; presetNameInput.value=n; presetWardsTa.value=(presets[n]||[]).join('\n'); };
+deletePresetBtn.onclick=()=>{ const n=presetSelect.value; if(!n||!presets[n]) return; if(!confirm(`Delete preset "${n}"?`)) return; delete presets[n]; savePresets(); refreshPresetSelect(); if(presetNameInput.value===n){ presetNameInput.value=''; presetWardsTa.value=''; } };
+savePresetBtn.onclick=()=>{ const n=(presetNameInput.value||'').trim(); if(!n) return alert('Enter a preset name'); const wards=(presetWardsTa.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean); presets[n]=wards; savePresets(); refreshPresetSelect(); alert('Preset saved'); };
+applyPresetBtn.onclick=()=>{ const wards=(presetWardsTa.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean); if(wards.length===0) return alert('No ward names'); if(!confirm('Replace current wards with this preset?')) return; data.wards = wards.map(n=>({ id: uuid(), name: n, beds: [] })); saveData(); selectedWardId=null; renderWards(); renderBeds(); closePresets(); };
+// Profiles UI bindings
+// Compact profiles menu elements
+const profileMenuBtn=document.getElementById('profileMenuBtn');
+const profileMenuPanel=document.getElementById('profileMenuPanel');
+const closeProfilePanelBtn=document.getElementById('closeProfilePanel');
+const profNewBtn=document.getElementById('profNewBtn');
+const profDupBtn=document.getElementById('profDupBtn');
+const profRenBtn=document.getElementById('profRenBtn');
+const profDelBtn=document.getElementById('profDelBtn');
+
+function createProfile(name, seedData){
+  const pid='p'+Date.now()+Math.floor(Math.random()*1000);
+  profileStore.map[pid]={ id: pid, name: name||('Profile '+Object.keys(profileStore.map).length), data: deepClone(seedData||{wards:[]}) };
+  profileStore.current=pid; currentProfileId=pid; data=deepClone(profileStore.map[pid].data);
+  selectedWardId=null; selectedBedId=null;
+  saveProfiles(); refreshProfileUI(); renderWards(); renderBeds(); backToBeds();
+}
+function renameProfile(pid, newName){ if(profileStore.map[pid]){ profileStore.map[pid].name=newName; saveProfiles(); refreshProfileUI(); } }
+function deleteProfile(pid){
+  const keys=Object.keys(profileStore.map);
+  if(keys.length<=1){ alert('At least one profile is required.'); return; }
+  delete profileStore.map[pid];
+  // choose another current
+  const nextId = Object.keys(profileStore.map)[0];
+  profileStore.current=nextId; currentProfileId=nextId; data=deepClone(profileStore.map[nextId].data);
+  saveProfiles(); refreshProfileUI(); renderWards(); renderBeds(); backToBeds();
+}
+
+function openProfilePanel(){ if(profileMenuPanel) profileMenuPanel.style.display='block'; }
+function closeProfilePanel(){ if(profileMenuPanel) profileMenuPanel.style.display='none'; }
+profileMenuBtn?.addEventListener('click', (e)=>{ e.stopPropagation(); if(profileMenuPanel){ const open=profileMenuPanel.style.display==='block'; profileMenuPanel.style.display=open?'none':'block'; }});
+closeProfilePanelBtn?.addEventListener('click', ()=> closeProfilePanel());
+document.addEventListener('click', (e)=>{ const c=document.getElementById('profilesMenu'); if(c && !c.contains(e.target)) closeProfilePanel(); });
+profNewBtn?.addEventListener('click', ()=>{ const name=prompt('New profile name'); if(name==null) return; createProfile(name.trim()||'Untitled', {wards:[]}); });
+profDupBtn?.addEventListener('click', ()=>{ const cur=profileStore.map[currentProfileId]; if(!cur) return; const name=prompt('Duplicate profile as', cur.name+' Copy'); if(name==null) return; createProfile(name.trim()||cur.name+' Copy', cur.data); });
+profRenBtn?.addEventListener('click', ()=>{ const cur=profileStore.map[currentProfileId]; if(!cur) return; const name=prompt('Rename profile', cur.name); if(name==null) return; renameProfile(currentProfileId, name.trim()||cur.name); closeProfilePanel(); });
+profDelBtn?.addEventListener('click', ()=>{ const cur=profileStore.map[currentProfileId]; if(!cur) return; if(!confirm(`Delete profile \"${cur.name}\"?`)) return; deleteProfile(currentProfileId); closeProfilePanel(); });
 document.getElementById('addBedBtn').onclick=()=>{
   const w=data.wards.find(w=>w.id===selectedWardId);
   if(!w)return;
@@ -236,7 +690,6 @@ document.getElementById('fileInput').onchange=e=>{
   r.readAsText(f);e.target.value='';
 };
 
-document.getElementById('toggleSidebarBtn').onclick=()=>document.body.classList.add('collapsed');
 document.getElementById('expandSidebarBtn').onclick=()=>document.body.classList.remove('collapsed');
 
 /* Swipe to hide/show sidebar */
@@ -252,21 +705,429 @@ document.addEventListener('touchend',e=>{
   startX=null;startY=null;
 },{passive:true});
 
-/* Sidebar resizer */
-const sidebar=document.getElementById('sidebar');
-const resizer=document.getElementById('resizer');
-let resizing=false;
-const savedW=localStorage.getItem(WIDTH_KEY);if(savedW)sidebar.style.width=savedW+'px';
-function saveWidth(x){localStorage.setItem(WIDTH_KEY,x);sidebar.style.width=x+'px';}
-resizer.addEventListener('mousedown',()=>{resizing=true});
-document.addEventListener('mousemove',e=>{
-  if(!resizing)return;
-  let x=e.clientX;if(x<100)x=100;if(x>window.innerWidth-100)x=window.innerWidth-100;
-  saveWidth(x);
-});
-document.addEventListener('mouseup',()=>resizing=false);
+const sidebar = document.getElementById('sidebar');
+const resizer = document.getElementById('resizer');
+let resizing = false;
 
-loadData();renderWards();renderBeds();
+// Load saved width
+const savedW = localStorage.getItem(WARD_WIDTH_KEY);
+if (savedW) sidebar.style.width = savedW + 'px';
+
+function startResize(e) {
+  resizing = true;
+  document.body.style.userSelect = 'none';
+}
+function doResize(e) {
+  if (!resizing) return;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const containerLeft = document.getElementById('container').getBoundingClientRect().left;
+  let newWidth = clientX - containerLeft;
+  if (newWidth < 100) newWidth = 100;
+  if (newWidth > window.innerWidth * 0.8) newWidth = window.innerWidth * 0.8;
+  sidebar.style.width = newWidth + 'px';
+}
+function stopResize() {
+  if (!resizing) return;
+  localStorage.setItem(WARD_WIDTH_KEY, parseInt(sidebar.style.width));
+  resizing = false;
+  document.body.style.userSelect = '';
+}
+resizer.addEventListener('mousedown', startResize);
+document.addEventListener('mousemove', doResize);
+document.addEventListener('mouseup', stopResize);
+resizer.addEventListener('touchstart', startResize, { passive: true });
+document.addEventListener('touchmove', doResize, { passive: false });
+document.addEventListener('touchend', stopResize);
+
+// Initialize profiles and UI
+loadProfiles();
+refreshProfileUI();
+renderWards();renderBeds();
+
+/* Simplified notify editor adapted from test/app.js, scoped to avoid collisions */
+const notifyEditor=(function(){
+  const $$=(sel,root=document)=>root.querySelector(sel);
+
+  function el(tag, attrs={}, ...children){
+    const e=document.createElement(tag);
+    Object.entries(attrs).forEach(([k,v])=>{
+      if(k==='class') e.className=v;
+      else if(k.startsWith('on')) e.addEventListener(k.slice(2), v);
+      else if(k==='dataset') Object.entries(v).forEach(([dk,dv])=> e.dataset[dk]=dv);
+      else e.setAttribute(k,v);
+    });
+    children.flat().forEach(c=>{ if(c!=null) e.appendChild(typeof c==='string'?document.createTextNode(c):c); });
+    return e;
+  }
+  function parseAmount(v){ if(!v) return 0; const m=(''+v).match(/-?\d+(?:[.,]\d+)?/); return m?parseFloat(m[0].replace(',','.')):0; }
+  function sumLines(lines){ return Array.from(lines.querySelectorAll('input.amount')).reduce((s,inp)=> s+parseAmount(inp.value),0); }
+  function getOverride(blockEl){
+    const oi=blockEl.querySelector('.override-in'), oo=blockEl.querySelector('.override-out');
+    return { in: parseAmount(oi?.value), out: parseAmount(oo?.value), hasIn: !!(oi && oi.value.trim()!==''), hasOut: !!(oo && oo.value.trim()!=='') };
+  }
+  function recalc(blockEl){
+    const ov=getOverride(blockEl);
+    const calcIn=sumLines(blockEl.querySelector('.lines.in'));
+    const calcOut=sumLines(blockEl.querySelector('.lines.out'));
+    const sumIn=ov.hasIn?ov.in:calcIn;
+    const sumOut=ov.hasOut?ov.out:calcOut;
+    const net=sumIn-sumOut;
+    blockEl.querySelector('.sum-in').textContent=Math.round(sumIn);
+    blockEl.querySelector('.sum-out').textContent=Math.round(sumOut);
+    const netSpan=blockEl.querySelector('.net');
+    netSpan.textContent=(net>=0?'+':'')+Math.round(net);
+    netSpan.classList.toggle('neg', net<0);
+    updatePreview();
+  }
+  function recalcAll(){ document.querySelectorAll('.io-block').forEach(b=>recalc(b)); }
+  function addIOLine(container, kind){
+    const line=el('div',{class:'io-line'});
+    const kindInput=el('input',{class:'kind',placeholder:kind==='in'?'oral / ivf / นม / ...':'urine / drain / ...'});
+    const displayInput=el('input',{class:'display',placeholder:'e.g., 500+ท1'});
+    const amount=el('input',{class:'amount',inputmode:'decimal',placeholder:'500'});
+    const rm=el('button',{class:'remove',onclick:()=>{ line.remove(); recalc(container.closest('.io-block')); }},'×');
+    line.append(kindInput,displayInput,amount,rm);
+    container.appendChild(line);
+    amount.addEventListener('input',()=>recalc(container.closest('.io-block')));
+  }
+  function gatherIO(blockEl){
+    const read=cls=>Array.from(blockEl.querySelectorAll(`.lines.${cls} .io-line`)).map(line=>({
+      kind: line.querySelector('input.kind').value.trim(),
+      display: line.querySelector('input.display')?.value.trim()||'',
+      amount: parseAmount(line.querySelector('input.amount').value)
+    })).filter(x=>x.kind||x.amount);
+    const ov=getOverride(blockEl);
+    return { in: read('in'), out: read('out'), override: ov };
+  }
+  function formatIO(label,data){
+    const calcIn=data.in.reduce((s,x)=>s+x.amount,0);
+    const calcOut=data.out.reduce((s,x)=>s+x.amount,0);
+    const sumIn=data.override?.hasIn?data.override.in:calcIn;
+    const sumOut=data.override?.hasOut?data.override.out:calcOut;
+    const net=sumIn-sumOut;
+    const fmtPairs=arr=>arr.map(x=>`${x.kind||'?'} ${(x.display&&x.display.trim())?x.display.trim():`${Math.round(x.amount)}`}`.trim()).join(', ');
+    const lines=[];
+    lines.push(`I/O ${label}:`);
+    lines.push(`I: ${Math.round(sumIn)} (${fmtPairs(data.in)})`);
+    lines.push(`O: ${Math.round(sumOut)} (${fmtPairs(data.out)})`);
+    if(!Number.isNaN(net)) lines.push(`${net>=0?'Pos':'Neg'}${Math.round(Math.abs(net))}`);
+    return lines.join('\n');
+  }
+  let currentWardName='';
+  function buildSegments(){
+    const bed=$$('#bed').value.trim();
+    const hashtags=$$('#hashtags').value.trim();
+    const cli=$$('#cli').value.trim();
+    const mx=$$('#mx')?.value.trim();
+    const vs={ bt: $$('#bt').value.trim(), pr: $$('#pr').value.trim(), rr: $$('#rr').value.trim(), bp: $$('#bp').value.trim(), o2: $$('#o2').value.trim() };
+    const morning=gatherIO(document.querySelector('.io-block[data-block="morning"]'));
+    const afternoon=gatherIO(document.querySelector('.io-block[data-block="afternoon"]'));
+    const sumIn=a=>a.in.reduce((s,x)=>s+x.amount,0);
+    const sumOut=a=>a.out.reduce((s,x)=>s+x.amount,0);
+    const mIn= morning.override.hasIn?morning.override.in:sumIn(morning);
+    const mOut= morning.override.hasOut?morning.override.out:sumOut(morning);
+    const aIn= afternoon.override.hasIn?afternoon.override.in:sumIn(afternoon);
+    const aOut= afternoon.override.hasOut?afternoon.override.out:sumOut(afternoon);
+    const totalIn=mIn+aIn, totalOut=mOut+aOut, totalNet=totalIn-totalOut;
+
+    const seg={};
+    // Compose header: ward/bed unless ward already has '/'
+    const ward = (currentWardName||'').trim();
+    let header = bed;
+    if(ward){
+      header = ward.includes('/') ? `${ward} ${bed}`.trim() : `${ward}/${bed}`.trim();
+    }
+    seg.header = header;
+    seg.hashtags=hashtags?hashtags.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>s.startsWith('#')?s:`#${s}`).join('\n'):'';
+    seg.cli=cli?`\nCli: ${cli}`:'';
+    const vsParts=[]; if(vs.bt)vsParts.push(`BT ${vs.bt}`); if(vs.pr)vsParts.push(`PR ${vs.pr}`); if(vs.rr)vsParts.push(`RR ${vs.rr}`); if(vs.bp)vsParts.push(`BP ${vs.bp}`); if(vs.o2)vsParts.push(`O2sat ${vs.o2.replace(/%?$/,'%')}`);
+    seg.vs=vsParts.length?`\nV/S ${vsParts.join(' ')}`:'';
+    const hasMorning = (morning.in?.length||0) > 0 || (morning.out?.length||0) > 0 || morning.override?.hasIn || morning.override?.hasOut;
+    const hasAfternoon = (afternoon.in?.length||0) > 0 || (afternoon.out?.length||0) > 0 || afternoon.override?.hasIn || afternoon.override?.hasOut;
+    seg.ioMorning = hasMorning ? ('\n' + formatIO('เช้า', morning)) : '';
+    seg.ioAfternoon = hasAfternoon ? ('\n' + formatIO('บ่าย', afternoon)) : '';
+    seg.total = (hasMorning || hasAfternoon) ? (`\nI/O รวม: ${Math.round(totalIn)}/${Math.round(totalOut)} (${totalNet>=0?'+':''}${Math.round(totalNet)})`) : '';
+    seg.mx=mx?`\nMx: ${mx}`:'';
+    return seg;
+  }
+  function compose(seg){
+    const parts=[]; if(seg.header)parts.push(seg.header); if(seg.hashtags)parts.push(seg.hashtags); if(seg.cli)parts.push(seg.cli); if(seg.vs)parts.push(seg.vs); if(seg.ioMorning)parts.push(seg.ioMorning); if(seg.ioAfternoon)parts.push(seg.ioAfternoon); if(seg.total)parts.push(seg.total); if(seg.mx)parts.push(seg.mx);
+    return parts.join('\n').replace(/\n\n\n+/g,'\n\n').trim();
+  }
+  let lastSegments=null;
+  function updatePreview(){
+    const segNew=buildSegments();
+    const out=document.getElementById('output');
+    let current=out.textContent||'';
+    if(!current){ out.textContent=compose(segNew); lastSegments=segNew; return; }
+    let updated=current;
+    if(lastSegments){
+      const keys=['header','hashtags','cli','vs','ioMorning','ioAfternoon','total','mx'];
+      const presenceChanged = keys.some(k => !!(lastSegments[k]) !== !!(segNew[k]));
+      if(presenceChanged){
+        updated = compose(segNew);
+      } else {
+        for(const k of keys){
+          const oldSeg=lastSegments[k]||''; const newSeg=segNew[k]||'';
+          if(oldSeg && updated.includes(oldSeg)){
+            updated = updated.replace(oldSeg,newSeg);
+          }
+        }
+      }
+    } else updated=compose(segNew);
+    out.textContent=updated; lastSegments=segNew;
+  }
+  function initIO(){
+    document.querySelectorAll('.io-block').forEach(block=>{
+      const linesIn=block.querySelector('.lines.in');
+      const linesOut=block.querySelector('.lines.out');
+      // start with 1 line each; user can add more via + Add buttons
+      addIOLine(linesIn,'in');
+      addIOLine(linesOut,'out');
+    });
+  }
+  function loadFromDetails(details){
+    const d=details||{};
+    $$('#bed').value=d.bed||''; $$('#hashtags').value=d.hashtags||d.dx||'';
+    $$('#cli').value=d.cli||''; $$('#mx').value=d.mx||'';
+    $$('#bt').value=d.bt||''; $$('#pr').value=d.pr||''; $$('#rr').value=d.rr||''; $$('#bp').value=d.bp||''; $$('#o2').value=d.o2||'';
+    const blocks=document.querySelectorAll('.io-block');
+    const io=d.io||[{in:[],out:[]},{in:[],out:[]}];
+    ['morning','afternoon'].forEach((_,idx)=>{
+      const block=blocks[idx];
+      const linesIn=block.querySelector('.lines.in'), linesOut=block.querySelector('.lines.out');
+      linesIn.innerHTML=''; linesOut.innerHTML='';
+      const inArr=io[idx]?.in||[], outArr=io[idx]?.out||[];
+      for(let i=0;i<Math.max(3,inArr.length);i++){
+        addIOLine(linesIn,'in');
+        const last=linesIn.lastElementChild; const x=inArr[i]||{};
+        last.querySelector('.kind').value=x.kind||''; last.querySelector('.display').value=x.display||''; last.querySelector('.amount').value=(x.amount??'');
+      }
+      for(let i=0;i<Math.max(3,outArr.length);i++){
+        addIOLine(linesOut,'out');
+        const last=linesOut.lastElementChild; const x=outArr[i]||{};
+        last.querySelector('.kind').value=x.kind||''; last.querySelector('.display').value=x.display||''; last.querySelector('.amount').value=(x.amount??'');
+      }
+      const ov=io[idx]?.override||{};
+      const oi=block.querySelector('.override-in'), oo=block.querySelector('.override-out');
+      if(oi) oi.value = ov.hasIn ? ov.in : '';
+      if(oo) oo.value = ov.hasOut ? ov.out : '';
+    });
+    updatePreview();
+  }
+  function getData(){
+    const blocks=document.querySelectorAll('.io-block');
+    const io=[...blocks].map(gatherIO);
+    const seg=buildSegments(); // keep composed
+    return {
+      bed: $$('#bed').value, hashtags: $$('#hashtags').value,
+      cli: $$('#cli').value, mx: $$('#mx').value, bt: $$('#bt').value, pr: $$('#pr').value, rr: $$('#rr').value, bp: $$('#bp').value, o2: $$('#o2').value,
+      io, preview: document.getElementById('output').textContent, lastSegments: null
+    };
+  }
+  function bindActions(){
+    const copyBtn=document.getElementById('copy');
+    async function copyText(text){
+      try{
+        if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); return true; }
+      }catch{}
+      try{
+        const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); const ok=document.execCommand('copy'); document.body.removeChild(ta); return ok;
+      }catch{} return false;
+    }
+    copyBtn?.addEventListener('click', async ()=>{
+      const ok=await copyText(document.getElementById('output').textContent);
+      copyBtn.textContent=ok?'Copied':'Copy failed'; setTimeout(()=>copyBtn.textContent='Copy',1400);
+    });
+    // mobile sheet
+    const sheet=document.getElementById('mobilePreviewSheet');
+    const mobileBody=document.getElementById('mobilePreviewBody');
+    const toggleBtn=document.getElementById('togglePreview');
+    const closeSheet=document.getElementById('closeSheet');
+    const copyMobile=document.getElementById('copyMobile');
+    const grabber=document.getElementById('sheetGrabber');
+    const PREVIEW_H_KEY='notify-preview-height-v1';
+    // apply saved height
+    try{
+      const saved=localStorage.getItem(PREVIEW_H_KEY);
+      if(saved){
+        const val=parseFloat(saved);
+        if(!Number.isNaN(val)) sheet.style.height = val + 'vh';
+      }
+    }catch{}
+    function mountPreview(){
+      let out=document.getElementById('output');
+      if(out.parentElement!==mobileBody) mobileBody.appendChild(out);
+    }
+    window.addEventListener('resize', mountPreview); mountPreview();
+    function openSheet(){
+      // ensure preview element is mounted into sheet
+      const out=document.getElementById('output');
+      if(out && out.parentElement!==mobileBody) mobileBody.appendChild(out);
+      sheet.classList.add('open');
+    }
+    function closeSheetFn(){ sheet.classList.remove('open'); }
+  toggleBtn?.addEventListener('click', ()=>{ if(sheet.classList.contains('open')) closeSheetFn(); else openSheet(); });
+    closeSheet?.addEventListener('click', ()=> closeSheetFn());
+    copyMobile?.addEventListener('click', async ()=>{
+      const ok=await copyText(document.getElementById('output').textContent);
+      copyMobile.textContent=ok?'Copied':'Copy failed'; setTimeout(()=>copyMobile.textContent='Copy',1400);
+    });
+    document.getElementById('mobilePreviewBody')?.addEventListener('click', (e)=>{
+      const previewEl=document.getElementById('output'); const sel=window.getSelection(); const isEditing=document.activeElement===previewEl;
+      if(!isEditing && sel && sel.isCollapsed){ closeSheetFn(); }
+    });
+    let openedOnce=false; const origUpdate=updatePreview;
+    updatePreview=function(){ origUpdate(); if(!openedOnce){ sheet.classList.add('open'); openedOnce=true; } };
+    document.getElementById('output').addEventListener('input', ()=>{ /* keep live edits */ if(changeCb) changeCb(); });
+    // drag to resize preview height
+    let resizing=false; let startY=0; let startH=0;
+    function onStart(ev){
+      resizing=true;
+      startY = (ev.touches? ev.touches[0].clientY : ev.clientY);
+      startH = sheet.getBoundingClientRect().height;
+      document.body.style.userSelect='none';
+    }
+    function onMove(ev){
+      if(!resizing) return;
+      const y = (ev.touches? ev.touches[0].clientY : ev.clientY);
+      const dy = startY - y; // drag up increases height
+      let newH = startH + dy;
+      const minH = window.innerHeight * 0.25;
+      const maxH = window.innerHeight * 0.9;
+      if(newH < minH) newH = minH;
+      if(newH > maxH) newH = maxH;
+      sheet.style.height = newH + 'px';
+      if(ev.cancelable) ev.preventDefault();
+    }
+    function onEnd(){
+      if(!resizing) return;
+      resizing=false;
+      document.body.style.userSelect='';
+      // persist as vh
+      const hpx = parseFloat(sheet.style.height);
+      if(!Number.isNaN(hpx) && window.innerHeight){
+        const vh = (hpx / window.innerHeight) * 100;
+        try{ localStorage.setItem(PREVIEW_H_KEY, String(Math.round(vh))); }catch{}
+      }
+    }
+    grabber?.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove, { passive:false });
+    document.addEventListener('mouseup', onEnd);
+    grabber?.addEventListener('touchstart', onStart, { passive:true });
+    document.addEventListener('touchmove', onMove, { passive:false });
+    document.addEventListener('touchend', onEnd);
+    // reset behavior
+    const resetBtn=document.getElementById('resetFab');
+    resetBtn?.addEventListener('click', ()=>{
+      const ok=confirm('Reset current patient data?');
+      if(!ok) return;
+      ['bed','hashtags','cli','mx','bt','pr','rr','bp','o2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+      document.querySelectorAll('.io-block').forEach(block=>{
+        const linesIn=block.querySelector('.lines.in');
+        const linesOut=block.querySelector('.lines.out');
+        linesIn.innerHTML=''; linesOut.innerHTML='';
+        addIOLine(linesIn,'in');
+        addIOLine(linesOut,'out');
+        const oi=block.querySelector('.override-in'); if(oi) oi.value='';
+        const oo=block.querySelector('.override-out'); if(oo) oo.value='';
+      });
+      const out=document.getElementById('output'); if(out) out.textContent='';
+      lastSegments=null;
+      updatePreview();
+      if(changeCb) changeCb();
+    });
+    // input bindings
+    ['bed','hashtags','cli','mx','bt','pr','rr','bp','o2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input', ()=>{ updatePreview(); if(changeCb) changeCb(); }); });
+    // add buttons for IO
+    document.querySelectorAll('.io-block').forEach(block=>{
+      const addIn=block.querySelector('.add-in');
+      const addOut=block.querySelector('.add-out');
+      const linesIn=block.querySelector('.lines.in');
+      const linesOut=block.querySelector('.lines.out');
+      addIn?.addEventListener('click', ()=>{ addIOLine(linesIn,'in'); updatePreview(); if(changeCb) changeCb(); });
+      addOut?.addEventListener('click', ()=>{ addIOLine(linesOut,'out'); updatePreview(); if(changeCb) changeCb(); });
+    });
+    document.querySelectorAll('.override-in, .override-out').forEach(inp=>{
+      inp.addEventListener('input', ()=> { recalc(inp.closest('.io-block')); if(changeCb) changeCb(); });
+    });
+  }
+  let changeCb=null;
+  let initialized=false;
+  function bootstrap(details){
+    if(!initialized){
+      initIO();
+      bindActions();
+      initialized=true;
+    }
+    currentWardName = details?.wardName || '';
+    loadFromDetails(details);
+  }
+  function onChange(cb){ changeCb = cb; }
+  return { bootstrap, getData, recalcAll, onChange };
+})();
+
+/* Wiring: open/close profile page, Save */
+const bedContainer=document.getElementById('bedContainer');
+const profilePage=document.getElementById('profilePage');
+const backToBedsBtn=document.getElementById('backToBedsBtn');
+const saveBtn=document.getElementById('saveProfileBtn');
+
+function openProfilePage(bed){
+  selectedBedId=bed.id;
+  // Load existing bed.details (JSON) into editor
+  let d={};
+  try{ d=JSON.parse(bed.details||'{}'); }catch{}
+  const ward=data.wards.find(w=>w.id===selectedWardId);
+  bedContainer.style.display='none';
+  profilePage.style.display='flex';
+  notifyEditor.bootstrap({
+    bed: bed.name||'',
+    hashtags: d.dx || d.hashtags || '',
+    cli: d.cli || d.note || '',
+    mx: d.mx || '',
+    bt: d.bt || '', pr: d.pr || '', rr: d.rr || '', bp: d.bp || '', o2: d.o2 || '',
+    io: d.io || [{in:[],out:[]},{in:[],out:[]}],
+    wardName: ward?.name || ''
+  });
+  // autosave while editing
+  notifyEditor.onChange(()=>{
+    const ward=data.wards.find(w=>w.id===selectedWardId);
+    if(!ward) return;
+    const selBed=ward.beds.find(x=>x.id===selectedBedId);
+    if(!selBed) return;
+    const cur=notifyEditor.getData();
+    selBed.name=cur.bed || selBed.name;
+    selBed.details=JSON.stringify({ ...cur, note: cur.cli });
+    saveData();
+    renderWards();
+    renderBeds();
+  });
+}
+
+function backToBeds(){
+  profilePage.style.display='none';
+  bedContainer.style.display='block';
+}
+
+backToBedsBtn.onclick=backToBeds;
+
+saveBtn.onclick=()=>{
+  const ward=data.wards.find(w=>w.id===selectedWardId);
+  if(!ward) return;
+  const bed=ward.beds.find(x=>x.id===selectedBedId);
+  if(!bed) return;
+  const d=notifyEditor.getData();
+  // Keep compatibility fields
+  bed.name=d.bed || bed.name;
+  const compat={ dx: d.hashtags, note: d.cli };
+  bed.details=JSON.stringify({ ...compat, ...d });
+  saveData(); renderWards(); renderBeds(); backToBeds();
+};
+
+
+// removed legacy modal/profile handlers
+
 })();
 </script>
 </body>
