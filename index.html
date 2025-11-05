@@ -57,14 +57,37 @@
     #main {
       flex:1; padding:10px; overflow-y:auto;
     }
+    #bedList { cursor:default; }
     #bedList .bed-item {
       display:flex; flex-direction:column;
       gap:6px; border-bottom:1px solid #eee; padding:8px 0;
+      cursor:grab; /* Indicates it is draggable */
     }
-    #bedList input, #bedList textarea {
+    #bedList .bed-item.over {
+      border-top: 3px solid #007bff; /* Highlight drop target */
+      padding-top: 5px; /* Adjust padding for border */
+    }
+    /* Hide default border when dragging over a target */
+    #bedList .bed-item.over:last-child {
+        border-bottom: 1px solid #eee;
+    }
+
+
+    #bedList textarea {
       width:100%; font-size:14px;
       padding:6px; border:1px solid #ccc; border-radius:4px;
+      resize: vertical; /* Allow manual vertical resize */
+      min-height: 28px; /* Standard input height for single line */
     }
+    /* Style for the Bed Name Textarea (Title) */
+    #bedList .bed-name {
+        font-weight: bold;
+        font-size: 16px;
+        padding-top: 3px;
+        border: 1px solid #ccc;
+    }
+
+
     #bedList button {
       align-self:flex-start;
       padding:6px 12px; border:1px solid #c00;
@@ -80,6 +103,7 @@
       border:1px solid #ccc; background:#fff;
       border-radius:0 4px 4px 0;
       cursor:pointer; display:none; z-index:1000;
+      font-size: 18px; /* Matching the sidebar button size */
     }
 
     /* COLLAPSED STATE */
@@ -122,7 +146,7 @@
     const STORAGE_KEY = 'wardManagerData';
     const WIDTH_KEY   = 'wardSidebarWidth';
     let data           = { wards: [] };
-    let selectedWardId = null, dragSrcId = null;
+    let selectedWardId = null, dragSrcId = null, bedDragSrcId = null; 
 
     function saveData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
     function loadData(){
@@ -130,6 +154,15 @@
       if(js) try{ data = JSON.parse(js) }catch{}
     }
     function uuid(){ return 'x'+Date.now()+Math.floor(Math.random()*1000) }
+
+    // Helper function for textareas to auto-expand vertically
+    function autoGrowTextarea(element) {
+        element.style.height = 'auto'; // Reset height
+        // Calculate the height needed (scroll height) and set CSS padding/border appropriately
+        // We use min-height defined in CSS to handle the initial small size.
+        element.style.height = element.scrollHeight + 'px';
+    }
+
 
     function renderWards(){
       const ul = document.getElementById('wardList'); ul.innerHTML = '';
@@ -139,7 +172,10 @@
         if(w.id===selectedWardId) li.classList.add('selected');
         li.onclick = ()=>{ selectedWardId = w.id; renderWards(); renderBeds(); };
         li.draggable = true;
-        li.addEventListener('dragstart', ()=> dragSrcId = w.id);
+        li.addEventListener('dragstart', (e)=> {
+            dragSrcId = w.id;
+            e.dataTransfer.effectAllowed = 'move';
+        });
         li.addEventListener('dragover', e=>{ e.preventDefault(); li.classList.add('over') });
         li.addEventListener('dragleave', ()=> li.classList.remove('over'));
         li.addEventListener('drop', e=>{
@@ -173,17 +209,75 @@
       ward.beds.forEach((b,i)=>{
         const div = document.createElement('div');
         div.className = 'bed-item';
+        div.draggable = true;
+        div.setAttribute('data-bed-id', b.id);
 
-        const nameInput = document.createElement('input');
-        nameInput.value = b.name;
-        nameInput.oninput = ()=>{
-          b.name = nameInput.value; saveData(); renderWards();
+        // --- Drag-and-Drop for Beds ---
+        div.addEventListener('dragstart', e => {
+            bedDragSrcId = b.id;
+            e.dataTransfer.effectAllowed = 'move';
+            // Set the drop zone to be the entire row
+            setTimeout(() => div.style.opacity = 0.5, 0); 
+        });
+        div.addEventListener('dragend', () => {
+            div.style.opacity = 1;
+        });
+        div.addEventListener('dragover', e => { 
+            e.preventDefault(); 
+            // Avoid dragging onto itself
+            if(b.id !== bedDragSrcId) div.classList.add('over');
+        });
+        div.addEventListener('dragleave', () => { 
+            div.classList.remove('over'); 
+        });
+        div.addEventListener('drop', e => {
+            e.stopPropagation();
+            div.classList.remove('over');
+            if (!bedDragSrcId || bedDragSrcId === b.id) return;
+
+            const beds = ward.beds;
+            const from = beds.findIndex(x => x.id === bedDragSrcId);
+            const to   = beds.findIndex(x => x.id === b.id);
+            
+            // Move item
+            const [movedBed] = beds.splice(from, 1);
+            beds.splice(to, 0, movedBed);
+
+            saveData();
+            renderBeds();
+        });
+
+        // Bed Name Textarea (Now allowing multi-line expansion)
+        const nameTa = document.createElement('textarea');
+        nameTa.className = 'bed-name';
+        nameTa.rows = 1; 
+        nameTa.placeholder = 'Bed Name (e.g., Room 1 Bed A)'; 
+        nameTa.value = b.name;
+        
+        // Initial auto-grow calculation
+        nameTa.onfocus = () => autoGrowTextarea(nameTa);
+        nameTa.onblur = () => autoGrowTextarea(nameTa);
+
+        nameTa.oninput = ()=>{
+          b.name = nameTa.value; 
+          saveData(); 
+          renderWards();
+          autoGrowTextarea(nameTa);
         };
 
         const detTa = document.createElement('textarea');
-        detTa.rows = 2; detTa.placeholder = 'Details…'; detTa.value = b.details;
+        detTa.rows = 2; 
+        detTa.placeholder = 'Details (Patient info, Notes...)'; 
+        detTa.value = b.details;
+
+        // Initial auto-grow calculation
+        detTa.onfocus = () => autoGrowTextarea(detTa);
+        detTa.onblur = () => autoGrowTextarea(detTa);
+
         detTa.oninput = ()=>{
-          b.details = detTa.value; saveData();
+          b.details = detTa.value; 
+          saveData();
+          autoGrowTextarea(detTa); 
         };
 
         const delBtn = document.createElement('button');
@@ -194,10 +288,14 @@
           saveData(); renderBeds(); renderWards();
         };
 
-        div.appendChild(nameInput);
+        div.appendChild(nameTa);
         div.appendChild(detTa);
         div.appendChild(delBtn);
         bedList.appendChild(div);
+        
+        // Ensure textareas are sized correctly on load
+        autoGrowTextarea(nameTa);
+        autoGrowTextarea(detTa);
       });
     }
 
@@ -211,9 +309,10 @@
       if(!ward) return;
       ward.beds.push({ id:uuid(), name:'New Bed', details:'' });
       saveData(); renderBeds(); renderWards();
+      // Focus on the new bed's name field
       setTimeout(()=>{
-        const inputs = document.querySelectorAll('#bedList .bed-item input');
-        if(inputs.length) inputs[inputs.length-1].focus();
+        const textareas = document.querySelectorAll('#bedList .bed-item textarea.bed-name');
+        if(textareas.length) textareas[textareas.length-1].focus();
       },0);
     };
 
@@ -293,3 +392,4 @@
   </script>
 </body>
 </html>
+```
