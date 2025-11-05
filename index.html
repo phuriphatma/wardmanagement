@@ -190,7 +190,7 @@
       let startY = null;
       let parent = null;
       ta.addEventListener('touchstart', function(e){
-        startY = e.touches[0](undefined).clientY;
+        startY = e.touches[0].clientY;
         parent = findScrollableAncestor(ta.parentElement);
       }, {passive:true});
 
@@ -198,7 +198,7 @@
         if (!startY) return;
         // if textarea has its own scrollable content, allow native scrolling
         if (ta.scrollHeight > ta.clientHeight + 1) return;
-        const y = e.touches[0](undefined).clientY;
+        const y = e.touches[0].clientY;
         const dy = startY - y; // positive when swiping up
         parent.scrollTop += dy;
         startY = y;
@@ -360,7 +360,7 @@
     };
     document.getElementById('importBtn').onclick = ()=>document.getElementById('fileInput').click();
     document.getElementById('fileInput').onchange = e=>{
-      const f = e.target.files[0](undefined); if(!f) return;
+      const f = e.target.files[0]; if(!f) return;
       const r = new FileReader();
       r.onload = ev => {
         const pass = prompt('Import password'); if(pass==null) return;
@@ -411,14 +411,57 @@
     resizer.addEventListener('touchstart',e=>{isResizing=true;},{passive:false});
     document.addEventListener('touchmove',e=>{
       if(!isResizing) return;
-      let x = e.touches[0](undefined).clientX, min=100, max=window.innerWidth-100;
+      let x = e.touches[0].clientX, min=100, max=window.innerWidth-100;
       if(x<min)x=min; if(x>max)x=max;
       saveWidth(x);
     },{passive:false});
     document.addEventListener('touchend',onMouseUp);
 
+    // Variables to track touch events
+    let touchStartX = null;
+    let touchStartY = null;
+    let touchEndX = null;
+    let touchEndY = null;
+
+    // Add touch event listeners to the document
+    document.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      touchEndY = e.changedTouches[0].screenY;
+      handleSwipe();
+    }, { passive: true });
+
+    // Function to handle swipe gestures
+    function handleSwipe() {
+      if (touchStartX === null || touchEndX === null) return;
+
+      const diffX = touchStartX - touchEndX;
+      const diffY = touchStartY - touchEndY;
+
+      // Check if the swipe is more horizontal than vertical
+      if (Math.abs(diffX) > Math.abs(diffY)) {
+        if (diffX > 0) {
+          // Swipe left: collapse the sidebar
+          document.body.classList.add('collapsed');
+        } else {
+          // Swipe right: expand the sidebar
+          document.body.classList.remove('collapsed');
+        }
+      }
+
+      // Reset touch coordinates
+      touchStartX = null;
+      touchStartY = null;
+      touchEndX = null;
+      touchEndY = null;
+    }
+
     loadData(); renderWards(); renderBeds();
   })();
   </script>
 </body>
-</html>If you still see the main view not scrolling when you use a trackpad or touchscreen over a textarea, tell me which device/browser you test with and I’ll tighten the touch/wheel handling (some mobile browsers have stricter passive event defaults).
+</html>
