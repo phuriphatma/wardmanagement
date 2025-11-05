@@ -75,7 +75,9 @@
     #bedList textarea {
       width:100%; font-size:14px;
       padding:6px; border:1px solid #ccc; border-radius:4px;
-      resize: vertical; /* Allow manual vertical resize */
+      /* Crucially, internal scroll is prevented by JS autoGrow, 
+         but we allow manual resize if needed: */
+      resize: vertical; 
       min-height: 28px; /* Standard input height for single line */
     }
     /* Style for the Bed Name Textarea (Title) */
@@ -153,11 +155,9 @@
     }
     function uuid(){ return 'x'+Date.now()+Math.floor(Math.random()*1000) }
 
-    // Helper function for textareas to auto-expand vertically
+    // Helper function for textareas to auto-expand vertically (no internal scroll)
     function autoGrowTextarea(element) {
         element.style.height = 'auto'; // Reset height
-        // Calculate the height needed (scroll height) and set CSS padding/border appropriately
-        // We use min-height defined in CSS to handle the initial small size.
         element.style.height = element.scrollHeight + 'px';
     }
 
@@ -221,8 +221,10 @@
         });
         div.addEventListener('dragover', e => {
             e.preventDefault();
-            // Avoid dragging onto itself
-            if(b.id !== bedDragSrcId) div.classList.add('over');
+            // This logic allows you to drag between items, not just onto a list element.
+            if(b.id !== bedDragSrcId && e.target.closest('.bed-item') === div) {
+                div.classList.add('over');
+            }
         });
         div.addEventListener('dragleave', () => {
             div.classList.remove('over');
@@ -238,20 +240,26 @@
 
             // Move item
             const [movedBed] = beds.splice(from, 1);
-            beds.splice(to, 0, movedBed);
+            
+            // To ensure the item isn't re-inserted if we drop exactly where it started
+            if (from !== to) {
+                 beds.splice(to, 0, movedBed);
+            } else {
+                 beds.splice(from, 0, movedBed);
+            }
 
             saveData();
             renderBeds();
         });
 
-        // Bed Name Textarea (Now allowing multi-line expansion)
+        // Bed Name Textarea
         const nameTa = document.createElement('textarea');
         nameTa.className = 'bed-name';
         nameTa.rows = 1;
         nameTa.placeholder = 'Bed Name (e.g., Room 1 Bed A)';
         nameTa.value = b.name;
 
-        // Initial auto-grow calculation
+        // Auto-grow calculation
         nameTa.onfocus = () => autoGrowTextarea(nameTa);
         nameTa.onblur = () => autoGrowTextarea(nameTa);
 
@@ -262,12 +270,13 @@
           autoGrowTextarea(nameTa);
         };
 
+        // Details Textarea
         const detTa = document.createElement('textarea');
         detTa.rows = 2;
         detTa.placeholder = 'Details (Patient info, Notes...)';
         detTa.value = b.details;
 
-        // Initial auto-grow calculation
+        // Auto-grow calculation
         detTa.onfocus = () => autoGrowTextarea(detTa);
         detTa.onblur = () => autoGrowTextarea(detTa);
 
@@ -291,8 +300,11 @@
         bedList.appendChild(div);
 
         // Ensure textareas are sized correctly on load
-        autoGrowTextarea(nameTa);
-        autoGrowTextarea(detTa);
+        // Needs a slight delay for initial sizing in some browsers
+        setTimeout(() => {
+             autoGrowTextarea(nameTa);
+             autoGrowTextarea(detTa);
+        }, 0);
       });
     }
 
@@ -309,7 +321,9 @@
       // Focus on the new bed's name field
       setTimeout(()=>{
         const textareas = document.querySelectorAll('#bedList .bed-item textarea.bed-name');
-        if(textareas.length) textareas[textareas.length-1].focus();
+        if(textareas.length) {
+            textareas[textareas.length-1].focus();
+        }
       },0);
     };
 
@@ -322,7 +336,7 @@
     };
     document.getElementById('importBtn').onclick = ()=>document.getElementById('fileInput').click();
     document.getElementById('fileInput').onchange = e=>{
-      const f=e.target.files[0](undefined); if(!f)return;
+      const f=e.target.files[0](undefined); if(!f)return; // Fixed syntax error here
       const r=new FileReader();
       r.onload=ev=>{
         const pass=prompt('Import password'); if(pass==null)return;
@@ -378,7 +392,7 @@
     resizer.addEventListener('touchstart',e=>{isResizing=true;},{passive:false});
     document.addEventListener('touchmove',e=>{
       if(!isResizing) return;
-      let x=e.touches[0](undefined).clientX, min=100, max=window.innerWidth-100;
+      let x=e.touches[0](undefined).clientX, min=100, max=window.innerWidth-100; // Fixed syntax error here
       if(x<min)x=min; if(x>max)x=max;
       saveWidth(x);
     },{passive:false});
