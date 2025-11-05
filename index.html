@@ -2,77 +2,61 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Ward & Bed Manager — Full View</title>
+<title>Ward & Bed Manager + Patient Profile</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <style>
-* { box-sizing:border-box }
-body,html { margin:0; padding:0; height:100%; font-family:'Inter',sans-serif; overflow:hidden }
-#container { display:flex; height:100%; position:relative }
+*{box-sizing:border-box;font-family:'Inter',sans-serif}
+body,html{margin:0;padding:0;height:100%;overflow:hidden}
+#container{display:flex;height:100%;position:relative}
 
-#sidebar {
-  width:250px; min-width:100px; max-width:80%;
-  border-right:1px solid #ccc;
-  display:flex; flex-direction:column; overflow:hidden;
-}
-#sidebarHeader { background:#fafafa; border-bottom:1px solid #ddd }
-#sidebarHeader button { width:100%; padding:12px; font-size:18px; background:#fff; border:none; border-bottom:1px solid #ddd; cursor:pointer; }
-#sidebarHeader button#addWardBtn { border-bottom:none; }
-#wardListContainer { flex:1; overflow-y:auto; padding:8px }
-#wardList { list-style:none; margin:0; padding:0 }
-#wardList li {
-  padding:6px; margin:4px 0; border-radius:4px;
-  cursor:pointer; user-select:none; border:1px solid transparent;
-}
-#wardList li.selected { background:#def }
-.controls { margin-top:10px }
+/* Sidebar */
+#sidebar{width:250px;min-width:100px;max-width:80%;border-right:1px solid #ccc;
+display:flex;flex-direction:column;overflow:hidden}
+#sidebarHeader{display:flex;flex-direction:column;background:#fafafa;border-bottom:1px solid #ddd}
+#sidebarHeader button{width:100%;padding:12px;font-size:18px;background:#fff;border:none;
+border-bottom:1px solid #ddd;cursor:pointer}
+#sidebarHeader button#addWardBtn{border-bottom:none}
+#wardListContainer{flex:1;overflow-y:auto;padding:8px}
+#wardList{list-style:none;margin:0;padding:0}
+#wardList li{padding:6px;margin:4px 0;border-radius:4px;cursor:pointer;user-select:none;border:1px solid transparent}
+#wardList li.selected{background:#def}
+#wardList li.over{border:1px dashed #000}
+.controls{margin-top:10px}
 
-#resizer { width:5px; cursor:col-resize; background:rgba(0,0,0,0.05); }
+/* Resizer */
+#resizer{width:5px;cursor:col-resize;background:rgba(0,0,0,0.05)}
 
-#main { flex:1; overflow-y:auto; padding:0; scroll-behavior:smooth; }
-#mainContent { padding:10px; }
+/* Main area */
+#main{flex:1;display:flex;flex-direction:row;overflow:hidden}
+#bedContainer{flex:1;padding:10px;overflow-y:auto;scroll-behavior:smooth;border-right:1px solid #eee}
+#bedList .bed-item{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #eee;padding:8px 0;cursor:grab}
+#bedList .bed-item.over{border-top:3px solid #007bff;padding-top:5px}
+#bedList textarea{width:100%;font-size:14px;padding:6px;border:1px solid #ccc;border-radius:4px;
+resize:vertical;min-height:28px;overflow:hidden}
+#bedList .bed-name{font-weight:bold;font-size:16px}
+#bedList button{align-self:flex-start;padding:6px 12px;border:1px solid #c00;
+background:#fee;color:#900;border-radius:4px;cursor:pointer}
 
-#expandSidebarBtn {
-  position:absolute; left:0; top:50px;
-  width:24px; height:32px; line-height:32px; text-align:center;
-  border:1px solid #ccc; background:#fff;
-  border-radius:0 4px 4px 0; cursor:pointer; display:none;
-  font-size:18px; z-index:1000;
-}
-body.collapsed #sidebar, body.collapsed #resizer { display:none; }
-body.collapsed #expandSidebarBtn { display:block; }
+/* Profile panel */
+#profilePanel{width:360px;max-width:100%;padding:16px;overflow-y:auto;display:none;background:#f9fafb}
+#profilePanel.active{display:block}
+#profilePanel h2{margin-top:0}
+#profilePanel label{display:block;margin:8px 0;font-weight:600}
+#profilePanel input,#profilePanel textarea,#profilePanel select{
+  width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;font-size:14px}
+#profilePanel .row{display:flex;gap:8px;align-items:center}
+#profilePanel .row label{flex:1}
 
-/* Quick Ward Note Style */
-header { padding:12px 20px; background:#f8f9fa; border-bottom:1px solid #ddd; }
-header h1 { margin:0; font-size:22px; }
-header .sub { font-size:13px; color:#666; }
-
-.card {
-  background:#fff; border:1px solid #ddd; border-radius:8px;
-  padding:12px 14px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,0.05);
-}
-.card h2 { margin-top:0; font-size:16px; }
-
-label { display:block; margin:6px 0; font-size:14px; }
-input,textarea,select {
-  width:100%; padding:6px; border:1px solid #ccc; border-radius:4px;
-  font-size:14px; font-family:inherit;
-}
-textarea { resize:vertical; }
-.row { display:flex; gap:8px; align-items:center; }
-.row.between { justify-content:space-between; }
-.actions { display:flex; gap:8px; justify-content:flex-end; }
-button { padding:6px 10px; font-size:14px; border-radius:4px; cursor:pointer; }
-button.ghost { background:#fff; border:1px solid #ccc; color:#333; }
-button:not(.ghost) { background:#007bff; border:1px solid #007bff; color:#fff; }
-.grid.vs { display:grid; grid-template-columns:repeat(auto-fit,minmax(80px,1fr)); gap:8px; }
-.tag { font-weight:600; color:#333; }
-.totals { margin-top:6px; font-size:13px; color:#333; }
-.io-card .row label { flex:1; }
-.io-card .override { margin-top:6px; background:#f9f9f9; padding:6px; border-radius:6px; }
+/* Expand button */
+#expandSidebarBtn{position:absolute;left:0;top:50px;width:24px;height:32px;
+padding:0;line-height:32px;text-align:center;border:1px solid #ccc;background:#fff;
+border-radius:0 4px 4px 0;cursor:pointer;display:none;z-index:1000;font-size:18px}
+body.collapsed #sidebar,body.collapsed #resizer{display:none}
+body.collapsed #expandSidebarBtn{display:block}
 </style>
 </head>
 <body>
@@ -85,36 +69,42 @@ button:not(.ghost) { background:#007bff; border:1px solid #007bff; color:#fff; }
     <div id="wardListContainer">
       <ul id="wardList"></ul>
       <div class="controls">
-        <button id="exportBtn">Export</button>
-        <button id="importBtn">Import</button>
+        <button id="exportBtn">Export Data</button>
+        <button id="importBtn">Import Data</button>
         <input type="file" id="fileInput" style="display:none">
       </div>
     </div>
   </div>
   <div id="resizer"></div>
-
   <div id="main">
-    <div id="mainContent">
-      <header>
-        <h1 id="wardTitle">Select a ward</h1>
-        <div class="sub">Tap a bed to view patient detail</div>
-      </header>
+    <div id="bedContainer">
+      <h2 id="wardTitle">Select a ward</h2>
+      <button id="addBedBtn" disabled>+ Add Bed</button>
       <div id="bedList"></div>
-      <div id="patientView" style="display:none"></div>
+    </div>
+    <div id="profilePanel">
+      <h2>Patient Profile</h2>
+      <div class="row">
+        <label>Bed/Room<input id="profileBed" placeholder="e.g., 6/1 รวม3"></label>
+        <label>Name<input id="profileName" placeholder="e.g., อัครเดช"></label>
+      </div>
+      <label>Hashtags / Dx<textarea id="profileDx" rows="5" placeholder="CCA c HCV cirrhosis&#10;U/D HT"></textarea></label>
+      <label>Notes<textarea id="profileNote" rows="6" placeholder="Progress note..."></textarea></label>
     </div>
   </div>
-
   <button id="expandSidebarBtn">&#9776;</button>
 </div>
 
 <script>
 (function(){
-const STORAGE_KEY='wardManagerDataFull';
-let data={wards:[]}, selectedWardId=null, selectedBedId=null;
+const STORAGE_KEY='wardManagerData';
+const WIDTH_KEY='wardSidebarWidth';
+let data={wards:[]},selectedWardId=null,selectedBedId=null,dragSrcId=null,bedDragSrcId=null;
 
-function uuid(){return 'x'+Date.now()+Math.floor(Math.random()*1000);}
-function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));}
+function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data))}
 function loadData(){const js=localStorage.getItem(STORAGE_KEY);if(js)try{data=JSON.parse(js)}catch{}}
+function uuid(){return 'x'+Date.now()+Math.floor(Math.random()*1000)}
+function autoGrow(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}
 
 function renderWards(){
   const ul=document.getElementById('wardList');ul.innerHTML='';
@@ -122,134 +112,159 @@ function renderWards(){
     const li=document.createElement('li');
     li.textContent=w.name+' ('+w.beds.length+' beds)';
     if(w.id===selectedWardId)li.classList.add('selected');
-    li.onclick=()=>{selectedWardId=w.id;selectedBedId=null;renderWards();renderBeds();};
+    li.onclick=()=>{selectedWardId=w.id;selectedBedId=null;renderWards();renderBeds();hideProfile();};
+    li.draggable=true;
+    li.addEventListener('dragstart',e=>{dragSrcId=w.id;e.dataTransfer.effectAllowed='move';});
+    li.addEventListener('dragover',e=>{e.preventDefault();li.classList.add('over')});
+    li.addEventListener('dragleave',()=>li.classList.remove('over'));
+    li.addEventListener('drop',e=>{
+      e.stopPropagation();li.classList.remove('over');
+      if(!dragSrcId||dragSrcId===w.id)return;
+      const from=data.wards.findIndex(x=>x.id===dragSrcId);
+      const to=data.wards.findIndex(x=>x.id===w.id);
+      const [m]=data.wards.splice(from,1);data.wards.splice(to,0,m);
+      saveData();renderWards();
+    });
     ul.appendChild(li);
   });
 }
 
 function renderBeds(){
   const bedList=document.getElementById('bedList');
-  const wardTitle=document.getElementById('wardTitle');
-  const patientView=document.getElementById('patientView');
-  patientView.style.display='none';
+  const title=document.getElementById('wardTitle');
+  const addBtn=document.getElementById('addBedBtn');
   bedList.innerHTML='';
   const ward=data.wards.find(w=>w.id===selectedWardId);
-  if(!ward){wardTitle.textContent='Select a ward';return;}
-  wardTitle.textContent='Ward: '+ward.name;
-  const addBtn=document.createElement('button');
-  addBtn.textContent='+ Add Bed';
-  addBtn.onclick=()=>{ward.beds.push({id:uuid(),name:'New Bed',details:'',note:{}});saveData();renderBeds();renderWards();};
-  bedList.appendChild(addBtn);
-  ward.beds.forEach(b=>{
+  if(!ward){title.textContent='Select a ward';addBtn.disabled=true;return;}
+  title.textContent='Ward: '+ward.name;addBtn.disabled=false;
+  ward.beds.forEach((b,i)=>{
     const div=document.createElement('div');
-    div.className='card';
-    div.innerHTML='<h2>'+b.name+'</h2><div>'+ (b.details||'') +'</div>';
-    div.onclick=()=>{selectedBedId=b.id;renderPatientView();};
+    div.className='bed-item';div.draggable=true;
+    div.setAttribute('data-bed-id',b.id);
+    div.addEventListener('click',()=>showProfile(b));
+    div.addEventListener('dragstart',e=>{bedDragSrcId=b.id;e.dataTransfer.effectAllowed='move';setTimeout(()=>div.style.opacity=0.5,0);});
+    div.addEventListener('dragend',()=>{div.style.opacity=1;});
+    div.addEventListener('dragover',e=>{e.preventDefault();if(b.id!==bedDragSrcId)div.classList.add('over');});
+    div.addEventListener('dragleave',()=>div.classList.remove('over'));
+    div.addEventListener('drop',e=>{
+      e.stopPropagation();div.classList.remove('over');
+      if(!bedDragSrcId||bedDragSrcId===b.id)return;
+      const beds=ward.beds;
+      const from=beds.findIndex(x=>x.id===bedDragSrcId);
+      const to=beds.findIndex(x=>x.id===b.id);
+      const [moved]=beds.splice(from,1);
+      beds.splice(to,0,moved);
+      saveData();renderBeds();
+    });
+
+    const nameTa=document.createElement('textarea');
+    nameTa.className='bed-name';
+    nameTa.placeholder='Bed Name';nameTa.value=b.name||'';
+    nameTa.oninput=()=>{b.name=nameTa.value;saveData();renderWards();autoGrow(nameTa);}
+    const delBtn=document.createElement('button');
+    delBtn.textContent='Delete';
+    delBtn.onclick=()=>{if(!confirm('Delete this bed?'))return;
+      ward.beds.splice(i,1);saveData();renderBeds();renderWards();};
+    div.appendChild(nameTa);
+    div.appendChild(delBtn);
     bedList.appendChild(div);
+    setTimeout(()=>autoGrow(nameTa),0);
   });
 }
 
-function renderPatientView(){
-  const ward=data.wards.find(w=>w.id===selectedWardId);
-  if(!ward)return;
-  const bed=ward.beds.find(b=>b.id===selectedBedId);
-  if(!bed)return;
-  const bedList=document.getElementById('bedList');
-  const patientView=document.getElementById('patientView');
-  bedList.innerHTML='';
-  patientView.style.display='block';
-  patientView.innerHTML=`
-  <section class="card"><h2>Bed: ${bed.name}</h2>
-  <div class="row">
-    <button id="backBtn" class="ghost">← Back</button>
-    <button id="saveBtn">Save</button>
-  </div></section>
-
-  <section class="card"><h2>Patient Info</h2>
-    <label>Name <input id="pName" value="${bed.note.name||''}" placeholder="Name"></label>
-    <label>Dx/Hashtags<textarea id="pDx" rows="4">${bed.note.dx||''}</textarea></label>
-  </section>
-
-  <section class="card"><h2>Clinical</h2>
-    <textarea id="pCli" rows="6" placeholder="Clinical note...">${bed.note.cli||''}</textarea>
-  </section>
-
-  <section class="card"><h2>Management</h2>
-    <textarea id="pMx" rows="3" placeholder="Plan...">${bed.note.mx||''}</textarea>
-  </section>
-
-  <section class="card"><h2>V/S</h2>
-    <div class="grid vs">
-      <label>BT <input id="pBt" value="${bed.note.bt||''}"></label>
-      <label>PR <input id="pPr" value="${bed.note.pr||''}"></label>
-      <label>RR <input id="pRr" value="${bed.note.rr||''}"></label>
-      <label>BP <input id="pBp" value="${bed.note.bp||''}"></label>
-      <label>O₂sat <input id="pO2" value="${bed.note.o2||''}"></label>
-    </div>
-  </section>
-
-  <section class="actions">
-    <button id="copyBtn">Copy Summary</button>
-  </section>
-  `;
-
-  document.getElementById('backBtn').onclick=()=>{renderBeds();};
-  document.getElementById('saveBtn').onclick=()=>{
-    bed.note={
-      name:document.getElementById('pName').value,
-      dx:document.getElementById('pDx').value,
-      cli:document.getElementById('pCli').value,
-      mx:document.getElementById('pMx').value,
-      bt:document.getElementById('pBt').value,
-      pr:document.getElementById('pPr').value,
-      rr:document.getElementById('pRr').value,
-      bp:document.getElementById('pBp').value,
-      o2:document.getElementById('pO2').value
-    };
-    saveData();
-    alert('Saved');
-  };
-  document.getElementById('copyBtn').onclick=()=>{
-    const txt=`${bed.name} — ${bed.note.name||''}
-Dx: ${bed.note.dx||''}
-Cli: ${bed.note.cli||''}
-Mx: ${bed.note.mx||''}
-V/S: BT ${bed.note.bt||''}, PR ${bed.note.pr||''}, RR ${bed.note.rr||''}, BP ${bed.note.bp||''}, O2 ${bed.note.o2||''}`;
-    navigator.clipboard.writeText(txt);
-    alert('Copied summary');
-  };
+function showProfile(b){
+  selectedBedId=b.id;
+  const panel=document.getElementById('profilePanel');
+  panel.classList.add('active');
+  document.getElementById('profileBed').value=b.name||'';
+  const d=JSON.parse(b.details||'{}');
+  document.getElementById('profileName').value=d.name||'';
+  document.getElementById('profileDx').value=d.dx||'';
+  document.getElementById('profileNote').value=d.note||'';
 }
+
+function hideProfile(){document.getElementById('profilePanel').classList.remove('active');}
+
+['profileBed','profileName','profileDx','profileNote'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',()=>{
+    const ward=data.wards.find(w=>w.id===selectedWardId);
+    if(!ward)return;
+    const bed=ward.beds.find(x=>x.id===selectedBedId);
+    if(!bed)return;
+    const d={
+      name:document.getElementById('profileName').value,
+      dx:document.getElementById('profileDx').value,
+      note:document.getElementById('profileNote').value
+    };
+    bed.name=document.getElementById('profileBed').value;
+    bed.details=JSON.stringify(d);
+    saveData();renderWards();renderBeds();
+  });
+});
 
 document.getElementById('addWardBtn').onclick=()=>{
   const name=prompt('Ward name');if(!name)return;
   data.wards.push({id:uuid(),name,beds:[]});
   saveData();renderWards();
 };
+document.getElementById('addBedBtn').onclick=()=>{
+  const w=data.wards.find(w=>w.id===selectedWardId);
+  if(!w)return;
+  w.beds.push({id:uuid(),name:'New Bed',details:'{}'});
+  saveData();renderBeds();renderWards();
+};
 document.getElementById('exportBtn').onclick=()=>{
-  const pass=prompt('Password');if(pass==null)return;
+  const pass=prompt('Export password');if(pass==null)return;
   const enc=CryptoJS.AES.encrypt(JSON.stringify(data),pass).toString();
-  const blob=new Blob([enc],{type:'text/plain'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='ward-data.txt';a.click();URL.revokeObjectURL(url);
+  const blob=new Blob([enc],{type:'text/plain'}),url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='ward-backup.txt';a.click();
+  URL.revokeObjectURL(url);
 };
 document.getElementById('importBtn').onclick=()=>document.getElementById('fileInput').click();
 document.getElementById('fileInput').onchange=e=>{
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
   r.onload=ev=>{
-    const pass=prompt('Password');if(pass==null)return;
+    const pass=prompt('Import password');if(pass==null)return;
     try{
       const dec=CryptoJS.AES.decrypt(ev.target.result,pass).toString(CryptoJS.enc.Utf8);
       const obj=JSON.parse(dec);
       if(!confirm('Overwrite current data?'))return;
-      data=obj;saveData();selectedWardId=null;renderWards();renderBeds();alert('Imported');
-    }catch(_){alert('Bad password or file');}
+      data=obj;saveData();selectedWardId=null;renderWards();renderBeds();alert('Import OK');
+    }catch{alert('Bad password or corrupt file');}
   };
   r.readAsText(f);e.target.value='';
 };
 
 document.getElementById('toggleSidebarBtn').onclick=()=>document.body.classList.add('collapsed');
 document.getElementById('expandSidebarBtn').onclick=()=>document.body.classList.remove('collapsed');
+
+/* Swipe to hide/show sidebar */
+let startX=null,startY=null;
+document.addEventListener('touchstart',e=>{startX=e.touches[0].clientX;startY=e.touches[0].clientY;},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(startX===null)return;
+  const dx=e.changedTouches[0].clientX-startX,dy=e.changedTouches[0].clientY-startY;
+  if(Math.abs(dx)>Math.abs(dy)){
+    if(dx<-50)document.body.classList.add('collapsed');
+    else if(dx>50)document.body.classList.remove('collapsed');
+  }
+  startX=null;startY=null;
+},{passive:true});
+
+/* Sidebar resizer */
+const sidebar=document.getElementById('sidebar');
+const resizer=document.getElementById('resizer');
+let resizing=false;
+const savedW=localStorage.getItem(WIDTH_KEY);if(savedW)sidebar.style.width=savedW+'px';
+function saveWidth(x){localStorage.setItem(WIDTH_KEY,x);sidebar.style.width=x+'px';}
+resizer.addEventListener('mousedown',()=>{resizing=true});
+document.addEventListener('mousemove',e=>{
+  if(!resizing)return;
+  let x=e.clientX;if(x<100)x=100;if(x>window.innerWidth-100)x=window.innerWidth-100;
+  saveWidth(x);
+});
+document.addEventListener('mouseup',()=>resizing=false);
 
 loadData();renderWards();renderBeds();
 })();
