@@ -4,27 +4,54 @@
   <meta charset="UTF-8">
   <title>Ward & Bed Manager</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <!-- CryptoJS for optional AES encryption -->
+  <!-- CryptoJS for AES export/import -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <style>
-    body, html { margin:0; padding:0; height:100%; font-family:sans-serif; }
+    * { box-sizing:border-box; }
+    body, html { margin:0; padding:0; height:100%; font-family:sans-serif; overflow:hidden; }
+    #toggleSidebarBtn, #expandSidebarBtn {
+      position:fixed; top:10px; z-index:1000;
+      background:#fff; border:1px solid #ccc; border-radius:4px;
+      width:28px; height:28px; line-height:26px; text-align:center;
+      cursor:pointer;
+    }
+    #toggleSidebarBtn { left:10px; }
+    #expandSidebarBtn { left:10px; display:none; }
+    body.collapsed #toggleSidebarBtn { display:none; }
+    body.collapsed #expandSidebarBtn { display:block; }
     #container { display:flex; height:100%; }
     #sidebar {
-      width:250px; border-right:1px solid #ccc; box-sizing:border-box;
-      padding:10px; overflow-y:auto;
+      width:250px; min-width:100px; max-width:80%;
+      border-right:1px solid #ccc; padding:10px; overflow-y:auto;
+    }
+    #resizer {
+      width:5px; cursor:col-resize; background:transparent;
     }
     #main {
       flex:1; padding:10px; overflow-y:auto;
     }
     button { margin:4px 0; padding:6px 12px; }
-    ul { list-style:none; padding:0; }
-    li { padding:6px; cursor:pointer; }
+    ul { list-style:none; padding:0; margin:0; }
+    li {
+      padding:6px; cursor:pointer; user-select:none;
+      border:1px solid transparent; border-radius:4px;
+    }
     li.selected { background:#def; }
+    li.over { border:1px dashed #000; }
     .bed-item { border-bottom:1px solid #eee; padding:6px 0; }
     .controls { margin-top:20px; }
+    /* collapsed */
+    body.collapsed #sidebar,
+    body.collapsed #resizer {
+      display:none;
+    }
   </style>
 </head>
 <body>
+  <!-- Collapse/Expand Buttons -->
+  <div id="toggleSidebarBtn">&#x25C0;</div>
+  <div id="expandSidebarBtn">&#x25B6;</div>
+
   <div id="container">
     <div id="sidebar">
       <button id="addWardBtn">+ Add Ward</button>
@@ -35,6 +62,7 @@
         <input type="file" id="fileInput" style="display:none">
       </div>
     </div>
+    <div id="resizer"></div>
     <div id="main">
       <h2 id="wardTitle">Select a ward</h2>
       <button id="addBedBtn" disabled>+ Add Bed</button>
@@ -47,74 +75,90 @@
     const STORAGE_KEY = 'wardManagerData';
     let data = { wards: [] };
     let selectedWardId = null;
+    let dragSrcId = null;
 
-    // UTIL: save to localStorage
+    // --- LOAD / SAVE ---
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
-
-    // UTIL: load from storage
     function load() {
       const js = localStorage.getItem(STORAGE_KEY);
-      if (js) {
-        try { data = JSON.parse(js); }
-        catch(e) { console.error('Failed to parse stored data', e); }
-      }
+      if (js) try { data = JSON.parse(js) } catch(e){ console.error(e) }
     }
+    function uuid(){ return 'x'+Date.now()+Math.floor(Math.random()*1000) }
 
-    // UTIL: generate simple unique id
-    function uuid() {
-      return 'x'+Date.now()+Math.floor(Math.random()*1000);
-    }
-
-    // RENDER ward list
-    function renderWards() {
+    // --- RENDER WARDS ---
+    function renderWards(){
       const ul = document.getElementById('wardList');
       ul.innerHTML = '';
-      data.wards.forEach(w => {
+      data.wards.forEach((w, idx)=>{
         const li = document.createElement('li');
         li.textContent = w.name + ' ('+ w.beds.length +' beds)';
-        if (w.id === selectedWardId) li.classList.add('selected');
-        li.onclick = ()=> { selectedWardId = w.id; renderWards(); renderBeds(); };
+        if (w.id===selectedWardId) li.classList.add('selected');
+
+        // click to select
+        li.onclick = ()=>{ selectedWardId = w.id; renderWards(); renderBeds() };
+
+        // drag & drop
+        li.draggable = true;
+        li.addEventListener('dragstart', e=>{
+          dragSrcId = w.id;
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        li.addEventListener('dragover', e=>{
+          e.preventDefault();
+          li.classList.add('over');
+        });
+        li.addEventListener('dragleave', ()=>{ li.classList.remove('over') });
+        li.addEventListener('drop', e=>{
+          e.stopPropagation(); li.classList.remove('over');
+          if (!dragSrcId || dragSrcId===w.id) return;
+          const from = data.wards.findIndex(x=>x.id===dragSrcId);
+          const to   = data.wards.findIndex(x=>x.id===w.id);
+          const [m]  = data.wards.splice(from,1);
+          data.wards.splice(to,0,m);
+          save(); renderWards();
+        });
+        li.addEventListener('dragend', ()=>{ li.classList.remove('over') });
+
         ul.appendChild(li);
       });
     }
 
-    // RENDER beds for selected ward
-    function renderBeds() {
+    // --- RENDER BEDS ---
+    function renderBeds(){
       const bedList = document.getElementById('bedList');
       const title = document.getElementById('wardTitle');
       const addBedBtn = document.getElementById('addBedBtn');
       bedList.innerHTML = '';
 
       const ward = data.wards.find(w=>w.id===selectedWardId);
-      if (!ward) {
+      if (!ward){
         title.textContent = 'Select a ward';
         addBedBtn.disabled = true;
         return;
       }
-      title.textContent = 'Ward: ' + ward.name;
+      title.textContent = 'Ward: '+ward.name;
       addBedBtn.disabled = false;
 
-      ward.beds.forEach(b => {
+      ward.beds.forEach(b=>{
         const div = document.createElement('div');
         div.className = 'bed-item';
-        const html = '<strong>'+b.name+'</strong><br>'
-                   + '<small>'+b.details.replace(/\n/g,'<br>')+'</small><br>'
-                   + '<button data-id="'+b.id+'">Edit</button> '
-                   + '<button data-del="'+b.id+'">Delete</button>';
-        div.innerHTML = html;
-        // Edit
-        div.querySelector('button[data-id]').onclick = ()=> {
-          const newName = prompt('Bed name', b.name);
-          if (!newName) return;
-          const newDetails = prompt('Details', b.details) || '';
-          b.name = newName;
-          b.details = newDetails;
+        div.innerHTML = 
+          '<strong>'+b.name+'</strong><br>' +
+          '<small>'+b.details.replace(/\n/g,'<br>')+'</small><br>' +
+          '<button data-id="'+b.id+'">Edit</button> '+
+          '<button data-del="'+b.id+'">Delete</button>';
+        // edit
+        div.querySelector('[data-id]').onclick = ()=>{
+          const nn = prompt('Bed name', b.name);
+          if (!nn) return;
+          const dd = prompt('Details', b.details)||'';
+          b.name=nn; b.details=dd;
           save(); renderBeds(); renderWards();
         };
-        // Delete
-        div.querySelector('button[data-del]').onclick = ()=> {
+        // delete
+        div.querySelector('[data-del]').onclick = ()=>{
           if (!confirm('Delete this bed?')) return;
           ward.beds = ward.beds.filter(x=>x.id!==b.id);
           save(); renderBeds(); renderWards();
@@ -123,75 +167,106 @@
       });
     }
 
-    // ADD ward
+    // --- BUTTONS ---
     document.getElementById('addWardBtn').onclick = ()=>{
       const name = prompt('Ward name');
       if (!name) return;
-      data.wards.push({ id: uuid(), name, beds: [] });
+      data.wards.push({ id:uuid(), name, beds:[] });
       save(); renderWards();
     };
-
-    // ADD bed
     document.getElementById('addBedBtn').onclick = ()=>{
       const ward = data.wards.find(w=>w.id===selectedWardId);
       if (!ward) return;
       const name = prompt('Bed name');
       if (!name) return;
       const details = prompt('Details for this bed')||'';
-      ward.beds.push({ id: uuid(), name, details });
+      ward.beds.push({ id:uuid(), name, details });
       save(); renderBeds(); renderWards();
     };
 
-    // EXPORT data as encrypted JSON
+    // --- EXPORT / IMPORT ---
     document.getElementById('exportBtn').onclick = ()=>{
-      const pass = prompt('Enter a password to encrypt your data (keep it safe!)');
-      if (pass===null) return;
+      const pass = prompt('Password to encrypt export');
+      if (pass==null) return;
       const text = JSON.stringify(data);
       const enc = CryptoJS.AES.encrypt(text, pass).toString();
-      const blob = new Blob([enc], {type:'text/plain'});
+      const blob = new Blob([enc],{type:'text/plain'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = 'ward-backup.txt';
-      a.click();
+      a.href = url; a.download = 'ward-backup.txt'; a.click();
       URL.revokeObjectURL(url);
     };
-
-    // IMPORT data
-    document.getElementById('importBtn').onclick = ()=>{
-      document.getElementById('fileInput').click();
-    };
-    document.getElementById('fileInput').onchange = e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
+    document.getElementById('importBtn').onclick = ()=> document.getElementById('fileInput').click();
+    document.getElementById('fileInput').onchange = e=>{
+      const f = e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = ev=>{
         const enc = ev.target.result;
-        const pass = prompt('Enter the password you used to encrypt');
-        if (pass===null) return;
+        const pass = prompt('Password to decrypt import');
+        if (pass==null) return;
         try {
-          const dec = CryptoJS.AES.decrypt(enc, pass).toString(CryptoJS.enc.Utf8);
+          const dec = CryptoJS.AES.decrypt(enc,pass).toString(CryptoJS.enc.Utf8);
           const obj = JSON.parse(dec);
-          if (!confirm('This will overwrite your current data. Continue?')) return;
-          data = obj;
-          save();
+          if (!confirm('Overwrite current data?')) return;
+          data = obj; save();
           selectedWardId = null;
           renderWards(); renderBeds();
-          alert('Data imported!');
-        } catch(err) {
-          alert('Failed to decrypt or parse data. Wrong password or corrupt file.');
+          alert('Import successful');
+        } catch(err){
+          alert('Failed to decrypt or parse data');
         }
       };
-      reader.readAsText(file);
-      // reset input
+      r.readAsText(f);
       e.target.value = '';
     };
 
-    // INITIALIZE
+    // --- SIDEBAR COLLAPSE/EXPAND ---
+    document.getElementById('toggleSidebarBtn').onclick = ()=>{
+      document.body.classList.add('collapsed');
+    };
+    document.getElementById('expandSidebarBtn').onclick = ()=>{
+      document.body.classList.remove('collapsed');
+    };
+
+    // --- RESIZER ---
+    const sidebar = document.getElementById('sidebar');
+    const resizer = document.getElementById('resizer');
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', e=>{
+      isResizing = true;
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+    resizer.addEventListener('touchstart', e=>{
+      e.preventDefault(); isResizing = true;
+    }, {passive:false});
+    document.addEventListener('touchmove', e=>{
+      if (!isResizing) return;
+      let x = e.touches[0].clientX;
+      const min=100, max=window.innerWidth-100;
+      if (x<min) x=min; if(x>max)x=max;
+      sidebar.style.width = x+'px';
+    }, {passive:false});
+
+    function onMouseMove(e){
+      if (!isResizing) return;
+      let x = e.clientX;
+      const min=100, max=window.innerWidth-100;
+      if (x<min) x=min; if(x>max)x=max;
+      sidebar.style.width = x+'px';
+    }
+    function onMouseUp(){
+      isResizing = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+
+    // --- INIT ---
     load();
     renderWards();
     renderBeds();
-
   })();
   </script>
 </body>
