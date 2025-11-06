@@ -62,6 +62,11 @@ body.edit-wards #wardList li .ward-delete{opacity:1;pointer-events:auto}
 .bed-item .select-box{margin-right:8px}
 .bed-item.selected{background:#f3f8ff}
 
+/* Status badge */
+.status-badge{margin-left:8px; font-size:11px; padding:2px 6px; border-radius:999px; border:1px solid transparent; vertical-align:middle;}
+.status-active{background:#e7ffe7; color:#056105; border-color:#bfe6bf}
+.status-discharge{background:#ffe7e7; color:#8a0000; border-color:#f0bcbc}
+
 
 /* Sheet table picking mode visuals */
 #sheetTableWrap.picking{outline:2px dashed #007bff; outline-offset:2px}
@@ -274,6 +279,14 @@ body.collapsed #expandSidebarBtn{display:none}
         <button id="selectBedsBtn" class="ghost">Select Beds</button>
         <button id="moveSelectedBtn" class="save-btn" style="display:none;">Move Selected (0)</button>
         <button id="clearSelectionBtn" class="ghost" style="display:none;">Clear</button>
+        <label style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+          Status
+          <select id="statusFilter">
+            <option value="both">Both</option>
+            <option value="active">Active</option>
+            <option value="discharge">Discharge</option>
+          </select>
+        </label>
       </div>
       <div id="bedList"></div>
     </div>
@@ -477,6 +490,13 @@ body.collapsed #expandSidebarBtn{display:none}
           <button id="pickDxBtn" type="button">Pick</button>
         </label>
       </div>
+      <div class="row">
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Status column (Active/Discharge)
+          <select id="colStatus" style="flex:1"></select>
+          <button id="pickStatusBtn" type="button">Pick</button>
+        </label>
+        <div style="flex:1; color:#666; font-size:12px;">Tip: Values like "active", "admit" count as Active; values like "discharge", "dc", "d/c" count as Discharge.</div>
+      </div>
       <label>
         <input type="checkbox" id="appendNameToBed" checked /> Append Name to Bed/Room
       </label>
@@ -501,6 +521,7 @@ const STORAGE_KEY='wardManagerData';
 const WARD_WIDTH_KEY='wardSidebarWidth'; // renamed to avoid redeclare
 const PROFILES_KEY='wardManagerProfiles-v1';
 let data={wards:[]},selectedWardId=null,selectedBedId=null,dragSrcId=null,bedDragSrcId=null;
+const STATUS_FILTER_KEY='wardStatusFilter-v1';
 // guard to prevent accidental bed open when clicking near "+ Add Bed"
 let suppressBedClickUntil=0;
 
@@ -644,11 +665,21 @@ function renderBeds(){
   const selBtn=document.getElementById('selectBedsBtn');
   const moveSelBtn=document.getElementById('moveSelectedBtn');
   const clearSelBtn=document.getElementById('clearSelectionBtn');
+  const statusSel=document.getElementById('statusFilter');
   bedList.innerHTML='';
   const ward=data.wards.find(w=>w.id===selectedWardId);
   if(!ward){title.textContent='Select a ward';addBtn.disabled=true;return;}
   title.textContent='Ward: '+ward.name;addBtn.disabled=false;
-  ward.beds.forEach((b,i)=>{
+  // apply status filter
+  const currentFilter = (localStorage.getItem(STATUS_FILTER_KEY)||'both');
+  if(statusSel){ statusSel.value=currentFilter; statusSel.onchange=()=>{ localStorage.setItem(STATUS_FILTER_KEY, statusSel.value); renderBeds(); }; }
+  const bedsToShow = ward.beds.filter(b=>{
+    const st=(b.status||'active');
+    if(currentFilter==='active') return st!=='discharge';
+    if(currentFilter==='discharge') return st==='discharge';
+    return true;
+  });
+  bedsToShow.forEach((b,i)=>{
     const div=document.createElement('div');
     div.className='bed-item';div.draggable=true;
     div.setAttribute('data-bed-id',b.id);
@@ -679,7 +710,13 @@ function renderBeds(){
     const wardName = ward.name || '';
     const bedName = b.name || '';
     const header = wardName ? (wardName.includes('/') ? `${wardName} ${bedName}`.trim() : `${wardName}/${bedName}`.trim()) : bedName;
-    line1.textContent = header;
+  line1.textContent = header;
+  // status badge
+  const st = (b.status==='discharge') ? 'discharge' : 'active';
+  const badge=document.createElement('span');
+  badge.className = 'status-badge ' + (st==='discharge' ? 'status-discharge' : 'status-active');
+  badge.textContent = st==='discharge' ? 'Discharge' : 'Active';
+  line1.appendChild(badge);
     // compute diagnosis hashtags from bed.details
     let dxText='';
     try{ const d=JSON.parse(b.details||'{}'); const raw=(d.dx||d.hashtags||'');
@@ -715,7 +752,7 @@ function renderBeds(){
     const moveBtn=document.createElement('button');
     moveBtn.textContent='Move';
     moveBtn.onclick=(e)=>{ e.stopPropagation(); openMoveBedModal({ bedId: b.id, fromWardId: ward.id, fromProfileId: currentProfileId }); };
-    const delBtn=document.createElement('button');
+  const delBtn=document.createElement('button');
     delBtn.className='delete';
     delBtn.textContent='Delete';
     delBtn.onclick=()=>{if(!confirm('Delete this bed?'))return;
@@ -761,15 +798,46 @@ function toggleBedSelection(bedId, divEl, explicit){
 
 function moveBedsBetweenWards(bedIds, fromWardId, fromProfileId, toWardId, toProfileId){
   try{
-    const srcProf=profileStore.map[fromProfileId]; const dstProf=profileStore.map[toProfileId];
-    if(!srcProf||!dstProf) return;
-    const srcWard=srcProf.data.wards.find(w=>w.id===fromWardId); const dstWard=dstProf.data.wards.find(w=>w.id===toWardId);
-    if(!srcWard||!dstWard) return;
-    const moving=[]; srcWard.beds = srcWard.beds.filter(b=>{ if(bedIds.includes(b.id)){ moving.push(b); return false; } return true; });
-    dstWard.beds.push(...moving);
-    saveProfiles(); renderWards(); renderBeds();
-    // clear selection if moved from current ward
-    if(fromProfileId===currentProfileId && fromWardId===selectedWardId){ selectedBedIds.clear(); selectionMode=false; }
+    const moving=[];
+    const isFromCurrent = fromProfileId===currentProfileId;
+    const isToCurrent = toProfileId===currentProfileId;
+
+    if(isFromCurrent && isToCurrent){
+      // within current profile: operate on live data
+      const srcWard=data.wards.find(w=>w.id===fromWardId);
+      const dstWard=data.wards.find(w=>w.id===toWardId);
+      if(!srcWard||!dstWard) return;
+      srcWard.beds = srcWard.beds.filter(b=>{ if(bedIds.includes(b.id)){ moving.push(b); return false; } return true; });
+      dstWard.beds.push(...moving);
+      saveData();
+    } else if(isFromCurrent && !isToCurrent){
+      // from current to another profile
+      const srcWard=data.wards.find(w=>w.id===fromWardId);
+      const dstProf=profileStore.map[toProfileId]; if(!srcWard||!dstProf) return;
+      const dstWard=(dstProf.data.wards||[]).find(w=>w.id===toWardId); if(!dstWard) return;
+      srcWard.beds = srcWard.beds.filter(b=>{ if(bedIds.includes(b.id)){ moving.push(b); return false; } return true; });
+      dstWard.beds.push(...moving);
+      saveData(); // persists current + entire profileStore
+    } else if(!isFromCurrent && isToCurrent){
+      // from another profile to current
+      const srcProf=profileStore.map[fromProfileId]; if(!srcProf) return;
+      const srcWard=(srcProf.data.wards||[]).find(w=>w.id===fromWardId); const dstWard=data.wards.find(w=>w.id===toWardId);
+      if(!srcWard||!dstWard) return;
+      srcWard.beds = srcWard.beds.filter(b=>{ if(bedIds.includes(b.id)){ moving.push(b); return false; } return true; });
+      dstWard.beds.push(...moving);
+      saveData();
+    } else {
+      // neither is current: operate only on store
+      const srcProf=profileStore.map[fromProfileId]; const dstProf=profileStore.map[toProfileId];
+      if(!srcProf||!dstProf) return;
+      const srcWard=(srcProf.data.wards||[]).find(w=>w.id===fromWardId); const dstWard=(dstProf.data.wards||[]).find(w=>w.id===toWardId);
+      if(!srcWard||!dstWard) return;
+      srcWard.beds = srcWard.beds.filter(b=>{ if(bedIds.includes(b.id)){ moving.push(b); return false; } return true; });
+      dstWard.beds.push(...moving);
+      saveProfiles();
+    }
+    renderWards(); renderBeds();
+    if(isFromCurrent && fromWardId===selectedWardId){ selectedBedIds.clear(); selectionMode=false; }
   }catch{}
 }
 
@@ -840,6 +908,7 @@ const colWard=document.getElementById('colWard');
 const colBed=document.getElementById('colBed');
 const colName=document.getElementById('colName');
 const colDx=document.getElementById('colDx');
+const colStatus=document.getElementById('colStatus');
 const appendNameToBed=document.getElementById('appendNameToBed');
 const sheetCancelBtn=document.getElementById('sheetCancelBtn');
 const sheetCreateBtn=document.getElementById('sheetCreateBtn');
@@ -849,6 +918,7 @@ let sheetRowsCache=null;
 const pickWardBtn=document.getElementById('pickWardBtn');
 const pickBedBtn=document.getElementById('pickBedBtn');
 const pickNameBtn=document.getElementById('pickNameBtn');
+const pickStatusBtn=document.getElementById('pickStatusBtn');
 const pickDxBtn=document.getElementById('pickDxBtn');
 const sheetPickStatus=document.getElementById('sheetPickStatus');
 let pickTarget=null;
@@ -888,7 +958,7 @@ function closeSheetProfileModal(){ sheetProfileModal.style.display='none'; }
 function resetSheetModal(){
   sheetCsvUrl.value=''; sheetHasHeader.checked=true; sheetFetchStatus.textContent='';
   sheetMapping.style.display='none'; sheetCreateBtn.disabled=true;
-  ;[colWard,colBed,colName,colDx].forEach(sel=> sel.innerHTML='');
+  ;[colWard,colBed,colName,colDx,colStatus].forEach(sel=> sel.innerHTML='');
 }
 sheetCancelBtn?.addEventListener('click', closeSheetProfileModal);
 sheetProfileModal?.addEventListener('click', (e)=>{ if(e.target===sheetProfileModal) closeSheetProfileModal(); });
@@ -904,8 +974,8 @@ sheetFetchBtn?.addEventListener('click', async ()=>{
     sheetRowsCache = rows;
     const header = sheetHasHeader.checked? (rows[0]||[]) : (rows[0]||[]);
     const cols = Math.max(...rows.map(r=>r.length));
-    function fill(sel){ sel.innerHTML=''; for(let i=0;i<cols;i++){ const opt=document.createElement('option'); const label=(header[i]||'').toString().trim(); opt.value=String(i); opt.textContent = `Col ${i+1}${label? ' - '+label:''}`; sel.appendChild(opt); } }
-    fill(colWard); fill(colBed); fill(colName); fill(colDx);
+  function fill(sel){ sel.innerHTML=''; for(let i=0;i<cols;i++){ const opt=document.createElement('option'); const label=(header[i]||'').toString().trim(); opt.value=String(i); opt.textContent = `Col ${i+1}${label? ' - '+label:''}`; sel.appendChild(opt); } }
+  fill(colWard); fill(colBed); fill(colName); fill(colDx); fill(colStatus);
     // Heuristic preselect by header names (Thai + English)
     const hRaw=header.map(x=> (x||'').toString().trim());
     const hLower=hRaw.map(x=> x.toLowerCase());
@@ -919,7 +989,8 @@ sheetFetchBtn?.addEventListener('click', async ()=>{
     const wardIdx=findIdx(['ตึก','ward','วอร์ด','ward/']); if(wardIdx!=null) colWard.value=String(wardIdx);
     const bedIdx=findIdx(['เตียง','bed','room','ห้อง']); if(bedIdx!=null) colBed.value=String(bedIdx);
     const nameIdx=findIdx(['ชื่อ','name','patient']); if(nameIdx!=null) colName.value=String(nameIdx);
-    const dxIdx=findIdx(['diagnosis','dx','diag','โรค','diagn']); if(dxIdx!=null) colDx.value=String(dxIdx);
+  const dxIdx=findIdx(['diagnosis','dx','diag','โรค','diagn']); if(dxIdx!=null) colDx.value=String(dxIdx);
+  const statusIdx=findIdx(['status','สถานะ','sts','discharge','dc','d/c','active','adm']); if(statusIdx!=null) colStatus.value=String(statusIdx);
     sheetMapping.style.display='block';
     sheetFetchStatus.textContent='Columns loaded';
     sheetCreateBtn.disabled=false;
@@ -929,7 +1000,7 @@ sheetFetchBtn?.addEventListener('click', async ()=>{
 });
 
 sheetHasHeader?.addEventListener('change', ()=>{ if(sheetRowsCache){ renderSheetPreview(); highlightSheetPreview(); } });
-;[colWard,colBed,colName,colDx].forEach(sel=> sel?.addEventListener('change', highlightSheetPreview));
+;[colWard,colBed,colName,colDx,colStatus].forEach(sel=> sel?.addEventListener('change', highlightSheetPreview));
 
 function renderSheetPreview(){
   const rows = sheetRowsCache||[];
@@ -963,11 +1034,13 @@ function highlightSheetPreview(){
   const bedIdx = parseInt(colBed.value||'-1');
   const nameIdx = colName.value!==''? parseInt(colName.value) : -1;
   const dxIdx = colDx.value!==''? parseInt(colDx.value) : -1;
+  const statusIdx = colStatus.value!==''? parseInt(colStatus.value) : -1;
   const colors = {};
   if(!Number.isNaN(wardIdx) && wardIdx>=0) colors[wardIdx] = '#e7f3ff';
   if(!Number.isNaN(bedIdx) && bedIdx>=0) colors[bedIdx] = '#e7ffe7';
   if(!Number.isNaN(nameIdx) && nameIdx>=0) colors[nameIdx] = '#fff7e0';
   if(!Number.isNaN(dxIdx) && dxIdx>=0) colors[dxIdx] = '#ffe7e7';
+  if(!Number.isNaN(statusIdx) && statusIdx>=0) colors[statusIdx] = '#f0e7ff';
   // reset all cells
   sheetTable.querySelectorAll('td,th').forEach(el=> el.style.background='');
   // color headers
@@ -979,7 +1052,7 @@ function highlightSheetPreview(){
 function startPick(target){
   pickTarget=target;
   if(sheetPickStatus){
-    const label = target==='ward'?'Ward': target==='bed'?'Bed/Room': target==='name'?'Name':'Dx';
+    const label = target==='ward'?'Ward': target==='bed'?'Bed/Room': target==='name'?'Name': target==='dx'?'Dx':'Status';
     sheetPickStatus.textContent = `Click a column to set ${label}`;
     sheetPickStatus.style.display = 'block';
   }
@@ -994,6 +1067,7 @@ pickWardBtn?.addEventListener('click', ()=> startPick('ward'));
 pickBedBtn?.addEventListener('click', ()=> startPick('bed'));
 pickNameBtn?.addEventListener('click', ()=> startPick('name'));
 pickDxBtn?.addEventListener('click', ()=> startPick('dx'));
+pickStatusBtn?.addEventListener('click', ()=> startPick('status'));
 
 sheetTable?.addEventListener('click', (e)=>{
   if(!pickTarget) return;
@@ -1006,6 +1080,7 @@ sheetTable?.addEventListener('click', (e)=>{
   else if(pickTarget==='bed') colBed.value=String(idx);
   else if(pickTarget==='name') colName.value=String(idx);
   else if(pickTarget==='dx') colDx.value=String(idx);
+  else if(pickTarget==='status') colStatus.value=String(idx);
   highlightSheetPreview();
   stopPick();
 });
@@ -1020,6 +1095,7 @@ sheetCreateBtn?.addEventListener('click', async ()=>{
     bedCol: parseInt(colBed.value||'0'),
     nameCol: colName.value? parseInt(colName.value) : null,
     dxCol: colDx.value? parseInt(colDx.value) : null,
+    statusCol: colStatus.value? parseInt(colStatus.value) : null,
     appendNameToBed: !!appendNameToBed.checked
   };
   try{
@@ -1039,7 +1115,7 @@ document.getElementById('addBedBtn').onclick=(e)=>{
   if(e){ e.preventDefault(); e.stopPropagation(); }
   const w=data.wards.find(w=>w.id===selectedWardId);
   if(!w)return;
-  const newBed={id:uuid(),name:'New Bed',details:'{}'};
+  const newBed={id:uuid(),name:'New Bed',status:'active',details:'{}'};
   w.beds.push(newBed);
   saveData();renderBeds();renderWards();
   // Temporarily suppress bed click handlers in case of retarget after reflow
@@ -1269,7 +1345,7 @@ async function fetchCsvRows(url){
 }
 
 function buildDataFromSheetRows(rows, opts){
-  const { hasHeader, wardCol, bedCol, nameCol, dxCol, appendNameToBed } = opts;
+  const { hasHeader, wardCol, bedCol, nameCol, dxCol, statusCol, appendNameToBed } = opts;
   const start = hasHeader? 1 : 0;
   const wardsMap = new Map();
   for(let r=start;r<rows.length;r++){
@@ -1278,6 +1354,7 @@ function buildDataFromSheetRows(rows, opts){
     const bed=(row[bedCol]||'').toString().trim();
     const name=(nameCol!=null? (row[nameCol]||'').toString().trim(): '');
     let dx=(dxCol!=null? (row[dxCol]||'').toString(): '').trim();
+    const stRaw = (statusCol!=null? (row[statusCol]||'').toString(): '').trim();
     if(!ward && !bed && !name && !dx) continue;
     let bedName=bed;
     if(appendNameToBed && name){ bedName = (bedName? (bedName+' ') : '') + name; }
@@ -1287,9 +1364,19 @@ function buildDataFromSheetRows(rows, opts){
       const parts = dx.split(/\r?\n|,|;|\|/).map(s=>s.trim()).filter(Boolean);
       tags = parts.map(s=> s.startsWith('#')? s : '#'+s).join('\n');
     }
+    // Map status
+    let status='active';
+    if(stRaw){
+      const s=stRaw.toLowerCase();
+      if(s.includes('dis') || s==='dc' || s==='d/c' || s.includes('discharge')) status='discharge';
+      else if(s.includes('act') || s.includes('adm') || s.includes('admit')) status='active';
+      // numeric/flag cases: 0=discharge, 1=active (heuristic)
+      else if(s==='0') status='discharge';
+      else if(s==='1') status='active';
+    }
     if(!wardsMap.has(ward)) wardsMap.set(ward, []);
     const beds=wardsMap.get(ward);
-    beds.push({ id: uuid(), name: bedName || (name||'Bed'), details: JSON.stringify({ bed: bedName, hashtags: tags, cli:'', mx:'', bt:'', pr:'', rr:'', bp:'', o2:'', io:[{in:[],out:[]},{in:[],out:[]}], preview:'', lastSegments:null }) });
+    beds.push({ id: uuid(), name: bedName || (name||'Bed'), status, details: JSON.stringify({ bed: bedName, hashtags: tags, cli:'', mx:'', bt:'', pr:'', rr:'', bp:'', o2:'', io:[{in:[],out:[]},{in:[],out:[]}], preview:'', lastSegments:null }) });
   }
   const wards=[...wardsMap.entries()].map(([name,beds])=>({ id: uuid(), name: name||'Ward', beds }));
   return { wards };
