@@ -32,7 +32,7 @@ border-bottom:1px solid #ddd;cursor:pointer}
 #wardList{list-style:none;margin:0;padding:0}
 #wardList li{padding:6px;margin:4px 0;border-radius:4px;cursor:pointer;user-select:none;border:1px solid transparent}
 #wardList li.selected{background:#def}
-#wardList li.over{border:1px dashed #000}
+#wardList li.over{border:1px dashed #000; background: rgba(0,123,255,0.06)}
 #wardList li{position:relative}
 #wardList li .ward-delete{position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;pointer-events:none;transition:opacity .15s;background:#fee;color:#900;border:1px solid #c00;border-radius:3px;padding:2px 6px;font-size:12px;line-height:1}
 body.edit-wards #wardList li .ward-delete{opacity:1;pointer-events:auto}
@@ -236,6 +236,20 @@ body.collapsed #expandSidebarBtn{display:none}
     #profilePage .mobile-preview-sheet { left: 0 !important; }
     #profilePage .fab-reset { left: 16px; }
   }
+  /* Keep the Profile dropdown within viewport on phones */
+  @media (max-width: 640px){
+    #profilesMenu{ position: static !important; }
+    #profileMenuPanel{
+      position: fixed !important;
+      left: 12px !important;
+      right: 12px !important;
+      top: 12px !important;
+      width: auto !important;
+      max-width: none !important;
+      max-height: 75vh !important;
+      z-index: 1002 !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -315,6 +329,11 @@ body.collapsed #expandSidebarBtn{display:none}
             <div class="row">
               <label>Bed/Room
                 <input id="bed" placeholder="e.g., กว6/1 รวม3 — ชื่อผู้ป่วย" />
+              </label>
+            </div>
+            <div class="row">
+              <label>HN
+                <input id="hn" inputmode="numeric" placeholder="e.g., 1234567" />
               </label>
             </div>
             <div class="row">
@@ -486,6 +505,12 @@ body.collapsed #expandSidebarBtn{display:none}
       <button id="sheetFetchBtn">Fetch Columns</button>
       <span id="sheetFetchStatus" style="font-size:12px;color:#777;"></span>
     </div>
+    <div class="row" id="sheetTabsRow" style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+      <label style="flex:1">Enter tab name (optional)
+        <input id="sheetTabName" placeholder="e.g., Gen3 ตึกเก่า" />
+      </label>
+      <div style="color:#777; font-size:12px; min-width:160px;">Press Enter to load by name, or paste a URL with gid=…</div>
+    </div>
     <div id="sheetMapping" style="display:none; margin-top:12px;">
       <div class="row">
         <label style="flex:1; display:flex; gap:6px; align-items:center;">Ward column
@@ -513,6 +538,13 @@ body.collapsed #expandSidebarBtn{display:none}
           <button id="pickStatusBtn" type="button">Pick</button>
         </label>
         <div style="flex:1; color:#666; font-size:12px;">Tip: Values like "active", "admit" count as Active; values like "discharge", "dc", "d/c" count as Discharge.</div>
+      </div>
+      <div class="row">
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">HN column (optional)
+          <select id="colHN" style="flex:1"></select>
+          <button id="pickHNBtn" type="button">Pick</button>
+        </label>
+        <div style="flex:1; color:#666; font-size:12px;">Optional: Patient hospital number (HN/MRN)</div>
       </div>
       <label>
         <input type="checkbox" id="appendNameToBed" checked /> Append Name to Bed/Room
@@ -631,6 +663,7 @@ function renderWards(){
   const ul=document.getElementById('wardList');ul.innerHTML='';
   data.wards.forEach(w=>{
     const li=document.createElement('li');
+    li.dataset.wardId = w.id;
     // count beds by current status filter
     const filter=getCurrentStatusFilter();
     const count=(w.beds||[]).filter(b=>{
@@ -652,7 +685,7 @@ function renderWards(){
     li.addEventListener('drop',e=>{
       const types=[...(e.dataTransfer?.types||[])]; li.classList.remove('over');
       if(!types.includes('application/ward-beds')) return;
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       try{
         const payload=JSON.parse(e.dataTransfer.getData('application/ward-beds')||'{}');
         if(!payload || !Array.isArray(payload.bedIds)) return;
@@ -747,12 +780,13 @@ function renderBeds(){
   badge.textContent = st==='discharge' ? 'Discharge' : 'Active';
     // non-interactive in list to avoid accidental changes; edit inside Quick Ward Note instead
   line1.appendChild(badge);
-    // compute diagnosis hashtags from bed.details
+    // compute diagnosis hashtags from bed.details and show HN if present
     let dxText='';
     try{ const d=JSON.parse(b.details||'{}'); const raw=(d.dx||d.hashtags||'');
       if(raw){ dxText = raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=> s.startsWith('#')? s : `#${s}`).join('\n'); }
     }catch{}
-    line2.textContent = dxText;
+    const hnText = (b.hn && (''+b.hn).trim()) ? `HN: ${(''+b.hn).trim()}` : '';
+    line2.textContent = hnText ? (dxText? `${hnText}\n${dxText}` : hnText) : dxText;
     textDiv.appendChild(line1);
     textDiv.appendChild(line2);
     // allow tap anywhere on the bed block to edit (except buttons); in selection mode, toggle selection instead
@@ -768,6 +802,32 @@ function renderBeds(){
       const bedIds = (selectedBedIds.size>0 && selectedBedIds.has(b.id)) ? Array.from(selectedBedIds) : [b.id];
       try{ e.dataTransfer.setData('application/ward-beds', JSON.stringify({ bedIds, fromWardId: ward.id, fromProfileId: currentProfileId })); }catch{}
     });
+
+    // Mobile long-press touch drag
+    div.addEventListener('touchstart',(e)=>{
+      const t=e.touches[0]; if(!t) return;
+      lpStart={x:t.clientX, y:t.clientY};
+      const bedIds=(selectedBedIds.size>0 && selectedBedIds.has(b.id))? Array.from(selectedBedIds): [b.id];
+      clearTimeout(longPressTimer);
+      longPressTimer=setTimeout(()=>{ startMobileDrag(bedIds, ward.id, t); }, LONG_PRESS_MS);
+    }, {passive:true});
+    div.addEventListener('touchmove',(e)=>{
+      const t=e.touches[0]; if(!t) return;
+      // cancel long-press if user intends to scroll before drag starts
+      if(!mobileDrag){
+        const dx=Math.abs(t.clientX-lpStart.x), dy=Math.abs(t.clientY-lpStart.y);
+        if(dx>MOVE_CANCEL_PX || dy>MOVE_CANCEL_PX){ clearTimeout(longPressTimer); }
+        return; // let scroll proceed
+      }
+      // dragging
+      if(e.cancelable) e.preventDefault();
+      updateMobileDrag(t);
+    }, {passive:false});
+    div.addEventListener('touchend',(e)=>{
+      clearTimeout(longPressTimer);
+      const t=e.changedTouches[0]; if(mobileDrag && t){ endMobileDrag(t); if(e.cancelable) e.preventDefault(); }
+    }, {passive:false});
+    div.addEventListener('touchcancel',()=>{ clearTimeout(longPressTimer); if(mobileDrag){ mobileDrag.ghost.remove(); mobileDrag=null; clearWardOver(); } });
 
   const actions=document.createElement('div');
     actions.className='actions-row';
@@ -821,6 +881,48 @@ function toggleBedSelection(bedId, divEl, explicit){
   if(divEl){ divEl.classList.toggle('selected', shouldSelect); const cb=divEl.querySelector('.select-box'); if(cb) cb.checked=shouldSelect; }
   // update toolbar count
   const moveSelBtn=document.getElementById('moveSelectedBtn'); if(moveSelBtn) moveSelBtn.textContent=`Move Selected (${selectedBedIds.size})`;
+}
+
+// ===== Mobile touch drag-and-drop (fallback for iOS/Android) =====
+let mobileDrag=null; // { ghost, bedIds, fromWardId }
+let longPressTimer=null, lpStart={x:0,y:0};
+const LONG_PRESS_MS=180, MOVE_CANCEL_PX=8;
+function getWardAtPoint(x,y){
+  const ul=document.getElementById('wardList'); if(!ul) return null;
+  let target=null;
+  ul.querySelectorAll('li').forEach(li=>{
+    const r=li.getBoundingClientRect();
+    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom){ target=li; }
+  });
+  return target;
+}
+function clearWardOver(){ document.querySelectorAll('#wardList li.over').forEach(li=> li.classList.remove('over')); }
+function startMobileDrag(bedIds, fromWardId, touch){
+  // create ghost near finger
+  const ghost=document.createElement('div');
+  ghost.textContent = `${bedIds.length>1? bedIds.length+" beds" : "1 bed"}`;
+  ghost.style.position='fixed'; ghost.style.left=(touch.clientX+8)+'px'; ghost.style.top=(touch.clientY+8)+'px';
+  ghost.style.background='rgba(0,0,0,0.75)'; ghost.style.color='#fff'; ghost.style.padding='6px 10px'; ghost.style.borderRadius='8px'; ghost.style.fontSize='12px'; ghost.style.pointerEvents='none'; ghost.style.zIndex='2001'; ghost.style.boxShadow='0 6px 14px rgba(0,0,0,0.35)';
+  document.body.appendChild(ghost);
+  mobileDrag={ ghost, bedIds, fromWardId };
+  // prevent bed click opening editor shortly after drag
+  try{ if(performance && performance.now) suppressBedClickUntil = performance.now() + 600; }catch{}
+}
+function updateMobileDrag(touch){
+  if(!mobileDrag) return;
+  const {ghost}=mobileDrag; ghost.style.left=(touch.clientX+8)+'px'; ghost.style.top=(touch.clientY+8)+'px';
+  clearWardOver(); const li=getWardAtPoint(touch.clientX, touch.clientY); if(li) li.classList.add('over');
+}
+function endMobileDrag(touch){
+  if(!mobileDrag) return;
+  const {ghost, bedIds, fromWardId}=mobileDrag; ghost.remove();
+  clearWardOver();
+  const li=getWardAtPoint(touch.clientX, touch.clientY);
+  if(li){
+    const targetWardId = li.dataset.wardId;
+    if(targetWardId){ moveBedsBetweenWards(bedIds, fromWardId, currentProfileId, targetWardId, currentProfileId); }
+  }
+  mobileDrag=null;
 }
 
 function moveBedsBetweenWards(bedIds, fromWardId, fromProfileId, toWardId, toProfileId){
@@ -930,11 +1032,14 @@ const sheetCsvUrl=document.getElementById('sheetCsvUrl');
 const sheetHasHeader=document.getElementById('sheetHasHeader');
 const sheetFetchBtn=document.getElementById('sheetFetchBtn');
 const sheetFetchStatus=document.getElementById('sheetFetchStatus');
+const sheetTabsRow=document.getElementById('sheetTabsRow');
+const sheetTabName=document.getElementById('sheetTabName');
 const sheetMapping=document.getElementById('sheetMapping');
 const colWard=document.getElementById('colWard');
 const colBed=document.getElementById('colBed');
 const colName=document.getElementById('colName');
 const colDx=document.getElementById('colDx');
+const colHN=document.getElementById('colHN');
 const colStatus=document.getElementById('colStatus');
 const appendNameToBed=document.getElementById('appendNameToBed');
 const sheetCancelBtn=document.getElementById('sheetCancelBtn');
@@ -946,6 +1051,7 @@ const pickWardBtn=document.getElementById('pickWardBtn');
 const pickBedBtn=document.getElementById('pickBedBtn');
 const pickNameBtn=document.getElementById('pickNameBtn');
 const pickStatusBtn=document.getElementById('pickStatusBtn');
+const pickHNBtn=document.getElementById('pickHNBtn');
 const pickDxBtn=document.getElementById('pickDxBtn');
 const sheetPickStatus=document.getElementById('sheetPickStatus');
 let pickTarget=null;
@@ -985,6 +1091,8 @@ function closeSheetProfileModal(){ sheetProfileModal.style.display='none'; }
 function resetSheetModal(){
   sheetCsvUrl.value=''; sheetHasHeader.checked=true; sheetFetchStatus.textContent='';
   sheetMapping.style.display='none'; sheetCreateBtn.disabled=true;
+  if(sheetTabsRow){ sheetTabsRow.style.display='flex'; }
+  if(sheetTabName){ sheetTabName.value=''; }
   ;[colWard,colBed,colName,colDx,colStatus].forEach(sel=> sel.innerHTML='');
 }
 sheetCancelBtn?.addEventListener('click', closeSheetProfileModal);
@@ -993,6 +1101,12 @@ sheetProfileModal?.addEventListener('click', (e)=>{ if(e.target===sheetProfileMo
 sheetFetchBtn?.addEventListener('click', async ()=>{
   let url=(sheetCsvUrl.value||'').trim(); if(!url) return alert('Enter CSV URL');
   url = normalizeGoogleCsvUrl(url);
+  // If user typed a tab name, prefer GVIZ-by-name URL
+  const typedName=(sheetTabName?.value||'').trim();
+  const sid=extractSheetId(url);
+  if(typedName && sid){
+    url = `https://docs.google.com/spreadsheets/d/${sid}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(typedName)}`;
+  }
   sheetCsvUrl.value = url;
   sheetFetchStatus.textContent='Fetching columns…';
   try{
@@ -1002,7 +1116,7 @@ sheetFetchBtn?.addEventListener('click', async ()=>{
     const header = sheetHasHeader.checked? (rows[0]||[]) : (rows[0]||[]);
     const cols = Math.max(...rows.map(r=>r.length));
   function fill(sel){ sel.innerHTML=''; for(let i=0;i<cols;i++){ const opt=document.createElement('option'); const label=(header[i]||'').toString().trim(); opt.value=String(i); opt.textContent = `Col ${i+1}${label? ' - '+label:''}`; sel.appendChild(opt); } }
-  fill(colWard); fill(colBed); fill(colName); fill(colDx); fill(colStatus);
+  fill(colWard); fill(colBed); fill(colName); fill(colDx); fill(colStatus); if(colHN) fill(colHN);
     // Heuristic preselect by header names (Thai + English)
     const hRaw=header.map(x=> (x||'').toString().trim());
     const hLower=hRaw.map(x=> x.toLowerCase());
@@ -1017,6 +1131,7 @@ sheetFetchBtn?.addEventListener('click', async ()=>{
     const bedIdx=findIdx(['เตียง','bed','room','ห้อง']); if(bedIdx!=null) colBed.value=String(bedIdx);
     const nameIdx=findIdx(['ชื่อ','name','patient']); if(nameIdx!=null) colName.value=String(nameIdx);
   const dxIdx=findIdx(['diagnosis','dx','diag','โรค','diagn']); if(dxIdx!=null) colDx.value=String(dxIdx);
+  const hnIdx=findIdx(['hn','mrn','hospital number']); if(hnIdx!=null && colHN) colHN.value=String(hnIdx);
   const statusIdx=findIdx(['status','สถานะ','sts','discharge','dc','d/c','active','adm']); if(statusIdx!=null) colStatus.value=String(statusIdx);
     sheetMapping.style.display='block';
     sheetFetchStatus.textContent='Columns loaded';
@@ -1026,8 +1141,27 @@ sheetFetchBtn?.addEventListener('click', async ()=>{
   }catch(err){ sheetFetchStatus.textContent='Failed to fetch: '+err.message; }
 });
 
+// Global: allow Enter in tab name field to fetch via GVIZ using current sheet ID
+sheetTabName?.addEventListener('keydown', async (e)=>{
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  const base=(sheetCsvUrl.value||'').trim(); if(!base) return;
+  const sid=extractSheetId(base); const name=(sheetTabName.value||'').trim();
+  if(!sid || !name) return;
+  const gviz=`https://docs.google.com/spreadsheets/d/${sid}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
+  sheetCsvUrl.value = gviz;
+  sheetFetchStatus.textContent='Fetching tab by name…';
+  try{
+    const rows=await fetchCsvRows(gviz);
+    sheetRowsCache=rows;
+    sheetMapping.style.display='block'; sheetCreateBtn.disabled=false;
+    renderSheetPreview(); highlightSheetPreview();
+    sheetFetchStatus.textContent='Columns loaded (tab name)';
+  }catch(err){ sheetFetchStatus.textContent='Failed (tab name): '+(err?.message||err); }
+});
+
 sheetHasHeader?.addEventListener('change', ()=>{ if(sheetRowsCache){ renderSheetPreview(); highlightSheetPreview(); } });
-;[colWard,colBed,colName,colDx,colStatus].forEach(sel=> sel?.addEventListener('change', highlightSheetPreview));
+;[colWard,colBed,colName,colDx,colStatus,colHN].forEach(sel=> sel?.addEventListener('change', highlightSheetPreview));
 
 function renderSheetPreview(){
   const rows = sheetRowsCache||[];
@@ -1062,12 +1196,14 @@ function highlightSheetPreview(){
   const nameIdx = colName.value!==''? parseInt(colName.value) : -1;
   const dxIdx = colDx.value!==''? parseInt(colDx.value) : -1;
   const statusIdx = colStatus.value!==''? parseInt(colStatus.value) : -1;
+  const hnIdx = (colHN && colHN.value!=='')? parseInt(colHN.value) : -1;
   const colors = {};
   if(!Number.isNaN(wardIdx) && wardIdx>=0) colors[wardIdx] = '#e7f3ff';
   if(!Number.isNaN(bedIdx) && bedIdx>=0) colors[bedIdx] = '#e7ffe7';
   if(!Number.isNaN(nameIdx) && nameIdx>=0) colors[nameIdx] = '#fff7e0';
   if(!Number.isNaN(dxIdx) && dxIdx>=0) colors[dxIdx] = '#ffe7e7';
   if(!Number.isNaN(statusIdx) && statusIdx>=0) colors[statusIdx] = '#f0e7ff';
+  if(!Number.isNaN(hnIdx) && hnIdx>=0) colors[hnIdx] = '#d7f9f9';
   // reset all cells
   sheetTable.querySelectorAll('td,th').forEach(el=> el.style.background='');
   // color headers
@@ -1095,6 +1231,7 @@ pickBedBtn?.addEventListener('click', ()=> startPick('bed'));
 pickNameBtn?.addEventListener('click', ()=> startPick('name'));
 pickDxBtn?.addEventListener('click', ()=> startPick('dx'));
 pickStatusBtn?.addEventListener('click', ()=> startPick('status'));
+pickHNBtn?.addEventListener('click', ()=> startPick('hn'));
 
 sheetTable?.addEventListener('click', (e)=>{
   if(!pickTarget) return;
@@ -1108,6 +1245,7 @@ sheetTable?.addEventListener('click', (e)=>{
   else if(pickTarget==='name') colName.value=String(idx);
   else if(pickTarget==='dx') colDx.value=String(idx);
   else if(pickTarget==='status') colStatus.value=String(idx);
+  else if(pickTarget==='hn' && colHN) colHN.value=String(idx);
   highlightSheetPreview();
   stopPick();
 });
@@ -1123,6 +1261,7 @@ sheetCreateBtn?.addEventListener('click', async ()=>{
     nameCol: colName.value? parseInt(colName.value) : null,
     dxCol: colDx.value? parseInt(colDx.value) : null,
     statusCol: colStatus.value? parseInt(colStatus.value) : null,
+    hnCol: (colHN && colHN.value)? parseInt(colHN.value) : null,
     appendNameToBed: !!appendNameToBed.checked
   };
   try{
@@ -1309,7 +1448,7 @@ moveConfirmBtn?.addEventListener('click', ()=>{
   if(ids.length===0) return;
   moveBedsBetweenWards(ids, movingBedCtx.fromWardId, movingBedCtx.fromProfileId, destWardId, destPid);
   closeMoveBedModal();
-  alert(ids.length>1? 'Beds moved' : 'Bed moved');
+  // no popup; UI updates immediately
 });
 
 // ========== Google Sheet profile helpers ==========
@@ -1337,6 +1476,8 @@ function normalizeGoogleCsvUrl(url){
   try{
     const u=new URL(url);
     if(u.hostname.includes('docs.google.com') && u.pathname.includes('/spreadsheets/')){
+      // If it's already a GVIZ CSV-by-name link, keep as-is
+      if(u.pathname.includes('/gviz/')) return url;
       // If already a CSV export/published link, keep
       if(u.pathname.includes('/export') && (u.searchParams.get('format')||'').toLowerCase()==='csv') return url;
       if(u.pathname.includes('/pub') && (u.searchParams.get('output')||'').toLowerCase()==='csv') return url;
@@ -1357,6 +1498,19 @@ function normalizeGoogleCsvUrl(url){
     }
   }catch{}
   return url;
+}
+
+function extractSheetId(url){
+  try{
+    const u=new URL(url);
+    if(u.hostname.includes('docs.google.com') && u.pathname.includes('/spreadsheets/')){
+      const parts=u.pathname.split('/');
+      const idx=parts.indexOf('d');
+      const sheetId=(idx>=0 && parts[idx+1])? parts[idx+1] : null;
+      return sheetId;
+    }
+  }catch{}
+  return null;
 }
 
 async function fetchCsvRows(url){
@@ -1399,8 +1553,34 @@ async function fetchCsvRows(url){
   throw new Error('Failed to fetch CSV (unknown error)');
 }
 
+// Fetch list of tabs (title + gid) for a given sheetId by scraping the htmlview page
+async function fetchSheetTabs(sheetId){
+  try{
+    const url=`https://docs.google.com/spreadsheets/d/${sheetId}/htmlview`;
+    const res=await fetch(url, { credentials:'omit', cache:'no-store' });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const html=await res.text();
+    // Heuristic parse: find anchors with #gid= and capture the label nearby
+    const map=new Map();
+    // Pattern: <a [^>]*href="...#gid=12345"[^>]*>(Sheet Name)<
+    const re=/<a[^>]+href=["'][^"']*#gid=(\d+)[^"']*["'][^>]*>([^<]{1,80})<\/a>/gi;
+    let m;
+    while((m=re.exec(html))){
+      const gid=m[1];
+      const title=m[2].trim();
+      if(!map.has(gid) && title && !title.startsWith('<')){ map.set(gid, title); }
+    }
+    // Fallback: try data attributes used in tabs markup
+    if(map.size===0){
+      const re2=/gid=(\d+).*?>([^<]+)</gis;
+      while((m=re2.exec(html))){ const gid=m[1]; const title=(m[2]||'').trim(); if(gid && title && !map.has(gid)) map.set(gid,title); }
+    }
+    return Array.from(map.entries()).map(([gid,title])=>({ gid, title }));
+  }catch(e){ return []; }
+}
+
 function buildDataFromSheetRows(rows, opts){
-  const { hasHeader, wardCol, bedCol, nameCol, dxCol, statusCol, appendNameToBed } = opts;
+  const { hasHeader, wardCol, bedCol, nameCol, dxCol, statusCol, hnCol, appendNameToBed } = opts;
   const start = hasHeader? 1 : 0;
   const wardsMap = new Map();
   for(let r=start;r<rows.length;r++){
@@ -1409,6 +1589,7 @@ function buildDataFromSheetRows(rows, opts){
     const bed=(row[bedCol]||'').toString().trim();
     const name=(nameCol!=null? (row[nameCol]||'').toString().trim(): '');
     let dx=(dxCol!=null? (row[dxCol]||'').toString(): '').trim();
+    const hn=(hnCol!=null? (row[hnCol]||'').toString().trim() : '');
     const stRaw = (statusCol!=null? (row[statusCol]||'').toString(): '').trim();
     if(!ward && !bed && !name && !dx) continue;
     let bedName=bed;
@@ -1431,7 +1612,9 @@ function buildDataFromSheetRows(rows, opts){
     }
     if(!wardsMap.has(ward)) wardsMap.set(ward, []);
     const beds=wardsMap.get(ward);
-    beds.push({ id: uuid(), name: bedName || (name||'Bed'), status, details: JSON.stringify({ bed: bedName, hashtags: tags, cli:'', mx:'', bt:'', pr:'', rr:'', bp:'', o2:'', io:[{in:[],out:[]},{in:[],out:[]}], preview:'', lastSegments:null }) });
+    const bedObj={ id: uuid(), name: bedName || (name||'Bed'), status, details: JSON.stringify({ bed: bedName, hashtags: tags, cli:'', mx:'', bt:'', pr:'', rr:'', bp:'', o2:'', io:[{in:[],out:[]},{in:[],out:[]}], preview:'', lastSegments:null }) };
+    if(hn) bedObj.hn = hn;
+    beds.push(bedObj);
   }
   const wards=[...wardsMap.entries()].map(([name,beds])=>({ id: uuid(), name: name||'Ward', beds }));
   return { wards };
@@ -1599,6 +1782,7 @@ const notifyEditor=(function(){
   function loadFromDetails(details){
     const d=details||{};
     $$('#bed').value=d.bed||''; $$('#hashtags').value=d.hashtags||d.dx||'';
+    if($$('#hn')) $$('#hn').value = d.hn || '';
     $$('#cli').value=d.cli||''; $$('#mx').value=d.mx||'';
     $$('#bt').value=d.bt||''; $$('#pr').value=d.pr||''; $$('#rr').value=d.rr||''; $$('#bp').value=d.bp||''; $$('#o2').value=d.o2||'';
     const blocks=document.querySelectorAll('.io-block');
@@ -1630,7 +1814,7 @@ const notifyEditor=(function(){
     const io=[...blocks].map(gatherIO);
     const seg=buildSegments(); // keep composed
     return {
-      bed: $$('#bed').value, hashtags: $$('#hashtags').value,
+      bed: $$('#bed').value, hn: ($$('#hn')?.value||''), hashtags: $$('#hashtags').value,
       cli: $$('#cli').value, mx: $$('#mx').value, bt: $$('#bt').value, pr: $$('#pr').value, rr: $$('#rr').value, bp: $$('#bp').value, o2: $$('#o2').value,
       io, preview: document.getElementById('output').textContent, lastSegments: null
     };
@@ -1672,6 +1856,18 @@ const notifyEditor=(function(){
     }
     window.addEventListener('resize', mountPreview); mountPreview();
     function openSheet(){
+            // Tab name input handlers: build GVIZ CSV URL by name
+            function applyTabNameFetch(){
+              const name=(sheetTabName?.value||'').trim(); if(!name) return;
+              const gviz=`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
+              sheetFetchStatus.textContent='Fetching tab by name…';
+              fetchCsvRows(gviz).then(rows2=>{
+                sheetRowsCache=rows2; renderSheetPreview(); highlightSheetPreview(); sheetFetchStatus.textContent='Columns loaded (tab name)';
+                sheetCsvUrl.value = gviz; // persist GVIZ URL for create/refresh
+              }).catch(err=>{ sheetFetchStatus.textContent='Failed (tab name): '+err.message; });
+            }
+            sheetTabName?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); applyTabNameFetch(); }});
+            sheetTabName?.addEventListener('blur', ()=>{ /* optional: fetch on blur if user typed */ });
       // ensure preview element is mounted into sheet
       const out=document.getElementById('output');
       if(out && out.parentElement!==mobileBody) mobileBody.appendChild(out);
@@ -1741,7 +1937,7 @@ const notifyEditor=(function(){
     resetBtn?.addEventListener('click', ()=>{
       const ok=confirm('Reset current patient data?');
       if(!ok) return;
-      ['bed','hashtags','cli','mx','bt','pr','rr','bp','o2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['bed','hn','hashtags','cli','mx','bt','pr','rr','bp','o2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
       document.querySelectorAll('.io-block').forEach(block=>{
         const linesIn=block.querySelector('.lines.in');
         const linesOut=block.querySelector('.lines.out');
@@ -1757,7 +1953,7 @@ const notifyEditor=(function(){
       if(changeCb) changeCb();
     });
     // input bindings
-    ['bed','hashtags','cli','mx','bt','pr','rr','bp','o2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input', ()=>{ updatePreview(); if(changeCb) changeCb(); }); });
+  ['bed','hn','hashtags','cli','mx','bt','pr','rr','bp','o2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input', ()=>{ updatePreview(); if(changeCb) changeCb(); }); });
     // add buttons for IO
     document.querySelectorAll('.io-block').forEach(block=>{
       const addIn=block.querySelector('.add-in');
@@ -1802,6 +1998,7 @@ function openProfilePage(bed, opts={}){
   profilePage.style.display='flex';
   notifyEditor.bootstrap({
     bed: bed.name||'',
+    hn: bed.hn || d.hn || '',
     hashtags: d.dx || d.hashtags || '',
     cli: d.cli || d.note || '',
     mx: d.mx || '',
@@ -1851,6 +2048,9 @@ function openProfilePage(bed, opts={}){
     const cur=notifyEditor.getData();
     selBed.name=cur.bed || selBed.name;
     selBed.details=JSON.stringify({ ...cur, note: cur.cli });
+    // persist HN as top-level field for easy access/list rendering
+    const hn=(cur.hn||'').trim();
+    if(hn) selBed.hn=hn; else delete selBed.hn;
     saveData();
     renderWards();
     renderBeds();
@@ -1881,6 +2081,7 @@ saveBtn.onclick=()=>{
   bed.name=d.bed || bed.name;
   const compat={ dx: d.hashtags, note: d.cli };
   bed.details=JSON.stringify({ ...compat, ...d });
+  const hn=(d.hn||'').trim(); if(hn) bed.hn=hn; else delete bed.hn;
   saveData(); renderWards(); renderBeds(); backToBeds();
 };
 
