@@ -57,6 +57,15 @@ body.edit-wards #wardList li .ward-delete{opacity:1;pointer-events:auto}
 #bedList .actions-row button{padding:6px 12px;border-radius:4px;cursor:pointer;border:1px solid #ccc;background:#fff}
 #bedList .actions-row .delete{border-color:#c00;background:#fee;color:#900}
 #bedList .bed-text .line2{white-space:pre-wrap}
+/* Bed selection mode */
+.bed-item.select-mode{cursor:default}
+.bed-item .select-box{margin-right:8px}
+.bed-item.selected{background:#f3f8ff}
+
+
+/* Sheet table picking mode visuals */
+#sheetTableWrap.picking{outline:2px dashed #007bff; outline-offset:2px}
+#sheetTableWrap.picking th,#sheetTableWrap.picking td{cursor:crosshair}
 
 /* Add Bed button: larger and with spacing from list */
 #addBedBtn{display:block;width:100%;padding:12px 14px;font-size:16px;border-radius:8px;border:1px solid #ccc;background:#f7f7f7;margin:8px 0 16px;cursor:pointer}
@@ -236,11 +245,13 @@ body.collapsed #expandSidebarBtn{display:none}
             <button id="closeProfilePanel" class="ghost" title="Close">×</button>
           </div>
           <ul id="profileList" style="list-style:none; margin:0; padding:6px 0;"></ul>
-          <div style="display:flex; gap:6px; padding:10px 12px; border-top:1px solid #eee; position:sticky; bottom:0; background:#fff;">
+          <div style="display:flex; gap:6px; padding:10px 12px; border-top:1px solid #eee; position:sticky; bottom:0; background:#fff; flex-wrap:wrap;">
             <button id="profNewBtn" title="New profile">New</button>
+            <button id="profNewSheetBtn" title="New profile from Google Sheet">New from Sheet</button>
             <button id="profDupBtn" title="Duplicate current">Dup</button>
             <button id="profRenBtn" title="Rename">Ren</button>
             <button id="profDelBtn" title="Delete" class="delete">Del</button>
+            <button id="profRefreshSheetBtn" style="margin-left:auto; display:none;" title="Refresh from Google Sheet">Refresh</button>
           </div>
         </div>
       </div>
@@ -258,7 +269,12 @@ body.collapsed #expandSidebarBtn{display:none}
   <div id="main">
     <div id="bedContainer">
       <h2 id="wardTitle">Select a ward</h2>
-      <button id="addBedBtn" disabled>+ Add Bed</button>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button id="addBedBtn" disabled>+ Add Bed</button>
+        <button id="selectBedsBtn" class="ghost">Select Beds</button>
+        <button id="moveSelectedBtn" class="save-btn" style="display:none;">Move Selected (0)</button>
+        <button id="clearSelectionBtn" class="ghost" style="display:none;">Clear</button>
+      </div>
       <div id="bedList"></div>
     </div>
 
@@ -401,6 +417,84 @@ body.collapsed #expandSidebarBtn{display:none}
   
 </div>
 
+<!-- Move Bed Modal -->
+<div id="moveBedModal" class="modal">
+  <div class="modal-content">
+    <h2>Move Bed</h2>
+    <div class="row">
+      <label style="flex:1">Destination Profile
+        <select id="moveProfileSelect"></select>
+      </label>
+      <label style="flex:1">Destination Ward
+        <select id="moveWardSelect"></select>
+      </label>
+    </div>
+    <div class="row" id="moveNewWardRow" style="display:none;">
+      <label style="flex:1">New Ward Name
+        <input id="moveNewWardName" placeholder="e.g., 3ก" />
+      </label>
+    </div>
+    <div class="actions">
+      <button id="moveCancelBtn">Cancel</button>
+      <button id="moveConfirmBtn" class="save-btn">Move</button>
+    </div>
+  </div>
+</div>
+
+<!-- Google Sheet Profile Modal -->
+<div id="sheetProfileModal" class="modal">
+  <div class="modal-content">
+    <h2>New Profile from Google Sheet</h2>
+    <p style="margin:6px 0 12px; font-size:13px; color:#555;">Tip: In Google Sheets, use File → Share → Publish to web → Entire sheet → CSV, then paste the CSV link here.</p>
+    <label>CSV URL
+      <input id="sheetCsvUrl" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..." />
+    </label>
+    <label>
+      <input type="checkbox" id="sheetHasHeader" checked /> First row is header
+    </label>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="sheetFetchBtn">Fetch Columns</button>
+      <span id="sheetFetchStatus" style="font-size:12px;color:#777;"></span>
+    </div>
+    <div id="sheetMapping" style="display:none; margin-top:12px;">
+      <div class="row">
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Ward column
+          <select id="colWard" style="flex:1"></select>
+          <button id="pickWardBtn" type="button">Pick</button>
+        </label>
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Bed/Room column
+          <select id="colBed" style="flex:1"></select>
+          <button id="pickBedBtn" type="button">Pick</button>
+        </label>
+      </div>
+      <div class="row">
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Name column
+          <select id="colName" style="flex:1"></select>
+          <button id="pickNameBtn" type="button">Pick</button>
+        </label>
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Dx column
+          <select id="colDx" style="flex:1"></select>
+          <button id="pickDxBtn" type="button">Pick</button>
+        </label>
+      </div>
+      <label>
+        <input type="checkbox" id="appendNameToBed" checked /> Append Name to Bed/Room
+      </label>
+      <div id="sheetPickStatus" style="margin-top:6px; font-size:12px; color:#007bff; display:none;">Click a column in the table…</div>
+      <div style="margin-top:12px; font-weight:600;">Table preview</div>
+      <div id="sheetTableWrap" style="max-height:320px; overflow:auto; border:1px solid #ddd; border-radius:6px; margin-top:6px;">
+        <table id="sheetTable" style="border-collapse:collapse; width:100%; font-size:12px;">
+          <!-- populated dynamically -->
+        </table>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="sheetCancelBtn">Cancel</button>
+      <button id="sheetCreateBtn" class="save-btn" disabled>Create Profile</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
 const STORAGE_KEY='wardManagerData';
@@ -481,6 +575,12 @@ function refreshProfileUI(){
       list.appendChild(li);
     });
   }
+  // toggle Refresh visibility if current profile is a sheet profile
+  const refreshBtn=document.getElementById('profRefreshSheetBtn');
+  if(refreshBtn){
+    const isSheet=!!(cur && cur.sheetConfig);
+    refreshBtn.style.display = isSheet ? 'inline-block' : 'none';
+  }
 }
 function uuid(){return 'x'+Date.now()+Math.floor(Math.random()*1000)}
 function autoGrow(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}
@@ -493,6 +593,22 @@ function renderWards(){
     if(w.id===selectedWardId)li.classList.add('selected');
     li.onclick=()=>{selectedWardId=w.id;selectedBedId=null;renderWards();renderBeds(); backToBeds();};
     li.draggable=true;
+    // Accept drop of beds to move between wards
+    li.addEventListener('dragover',e=>{
+      const types=[...(e.dataTransfer?.types||[])];
+      if(types.includes('application/ward-beds')){ e.preventDefault(); li.classList.add('over'); }
+    });
+    li.addEventListener('dragleave',()=> li.classList.remove('over'));
+    li.addEventListener('drop',e=>{
+      const types=[...(e.dataTransfer?.types||[])]; li.classList.remove('over');
+      if(!types.includes('application/ward-beds')) return;
+      e.preventDefault();
+      try{
+        const payload=JSON.parse(e.dataTransfer.getData('application/ward-beds')||'{}');
+        if(!payload || !Array.isArray(payload.bedIds)) return;
+        moveBedsBetweenWards(payload.bedIds, payload.fromWardId, payload.fromProfileId, w.id, currentProfileId);
+      }catch{}
+    });
     li.addEventListener('dragstart',e=>{dragSrcId=w.id;e.dataTransfer.effectAllowed='move';});
     li.addEventListener('dragover',e=>{e.preventDefault();li.classList.add('over')});
     li.addEventListener('dragleave',()=>li.classList.remove('over'));
@@ -525,6 +641,9 @@ function renderBeds(){
   const bedList=document.getElementById('bedList');
   const title=document.getElementById('wardTitle');
   const addBtn=document.getElementById('addBedBtn');
+  const selBtn=document.getElementById('selectBedsBtn');
+  const moveSelBtn=document.getElementById('moveSelectedBtn');
+  const clearSelBtn=document.getElementById('clearSelectionBtn');
   bedList.innerHTML='';
   const ward=data.wards.find(w=>w.id===selectedWardId);
   if(!ward){title.textContent='Select a ward';addBtn.disabled=true;return;}
@@ -569,29 +688,89 @@ function renderBeds(){
     line2.textContent = dxText;
     textDiv.appendChild(line1);
     textDiv.appendChild(line2);
-    // allow tap anywhere on the bed block to edit (except buttons)
+    // allow tap anywhere on the bed block to edit (except buttons); in selection mode, toggle selection instead
     div.addEventListener('click',(ev)=>{
       if(performance && performance.now && performance.now() < suppressBedClickUntil) return;
       if(ev.target.closest('button')) return; // buttons handle their own click
-      openProfilePage(b);
+      if(selectionMode){ toggleBedSelection(b.id, div); }
+      else openProfilePage(b);
     });
 
-    const actions=document.createElement('div');
+    // Multi-move payload for drag onto other wards
+    div.addEventListener('dragstart',e=>{
+      const bedIds = (selectedBedIds.size>0 && selectedBedIds.has(b.id)) ? Array.from(selectedBedIds) : [b.id];
+      try{ e.dataTransfer.setData('application/ward-beds', JSON.stringify({ bedIds, fromWardId: ward.id, fromProfileId: currentProfileId })); }catch{}
+    });
+
+  const actions=document.createElement('div');
     actions.className='actions-row';
+  // selection checkbox
+  const selectBox=document.createElement('input');
+  selectBox.type='checkbox'; selectBox.className='select-box'; selectBox.style.display= selectionMode? 'inline-block':'none';
+  selectBox.checked = selectedBedIds.has(b.id);
+  selectBox.addEventListener('click', (e)=>{ e.stopPropagation(); toggleBedSelection(b.id, div, e.target.checked); });
     const editBtn=document.createElement('button');
     editBtn.textContent='Edit';
     editBtn.onclick=(e)=>{ e.stopPropagation(); openProfilePage(b); };
+    const moveBtn=document.createElement('button');
+    moveBtn.textContent='Move';
+    moveBtn.onclick=(e)=>{ e.stopPropagation(); openMoveBedModal({ bedId: b.id, fromWardId: ward.id, fromProfileId: currentProfileId }); };
     const delBtn=document.createElement('button');
     delBtn.className='delete';
     delBtn.textContent='Delete';
     delBtn.onclick=()=>{if(!confirm('Delete this bed?'))return;
       ward.beds.splice(i,1);saveData();renderBeds();renderWards();};
-    actions.appendChild(editBtn);
+  actions.appendChild(selectBox);
+  actions.appendChild(editBtn);
+    actions.appendChild(moveBtn);
     actions.appendChild(delBtn);
     div.appendChild(textDiv);
     div.appendChild(actions);
+    if(selectionMode){ div.classList.add('select-mode'); if(selectedBedIds.has(b.id)) div.classList.add('selected'); }
     bedList.appendChild(div);
   });
+
+  // selection toolbar visibility
+  function updateSelToolbar(){
+    const count=selectedBedIds.size;
+    moveSelBtn.style.display = selectionMode? 'inline-block':'none';
+    clearSelBtn.style.display = selectionMode? 'inline-block':'none';
+    moveSelBtn.textContent = `Move Selected (${count})`;
+    // show/hide checkboxes
+    bedList.querySelectorAll('.select-box').forEach(cb=> cb.style.display = selectionMode? 'inline-block':'none');
+    bedList.querySelectorAll('.bed-item').forEach(item=> item.classList.toggle('select-mode', selectionMode));
+  }
+  updateSelToolbar();
+  selBtn.onclick=()=>{ selectionMode=!selectionMode; if(!selectionMode) selectedBedIds.clear(); renderBeds(); };
+  clearSelBtn.onclick=()=>{ selectedBedIds.clear(); renderBeds(); };
+  moveSelBtn.onclick=()=>{
+    if(selectedBedIds.size===0) return;
+    openMoveBedModal({ bedIds: Array.from(selectedBedIds), fromWardId: ward.id, fromProfileId: currentProfileId });
+  };
+}
+
+let selectionMode=false;
+const selectedBedIds=new Set();
+function toggleBedSelection(bedId, divEl, explicit){
+  const shouldSelect = (explicit!=null)? explicit : !selectedBedIds.has(bedId);
+  if(shouldSelect) selectedBedIds.add(bedId); else selectedBedIds.delete(bedId);
+  if(divEl){ divEl.classList.toggle('selected', shouldSelect); const cb=divEl.querySelector('.select-box'); if(cb) cb.checked=shouldSelect; }
+  // update toolbar count
+  const moveSelBtn=document.getElementById('moveSelectedBtn'); if(moveSelBtn) moveSelBtn.textContent=`Move Selected (${selectedBedIds.size})`;
+}
+
+function moveBedsBetweenWards(bedIds, fromWardId, fromProfileId, toWardId, toProfileId){
+  try{
+    const srcProf=profileStore.map[fromProfileId]; const dstProf=profileStore.map[toProfileId];
+    if(!srcProf||!dstProf) return;
+    const srcWard=srcProf.data.wards.find(w=>w.id===fromWardId); const dstWard=dstProf.data.wards.find(w=>w.id===toWardId);
+    if(!srcWard||!dstWard) return;
+    const moving=[]; srcWard.beds = srcWard.beds.filter(b=>{ if(bedIds.includes(b.id)){ moving.push(b); return false; } return true; });
+    dstWard.beds.push(...moving);
+    saveProfiles(); renderWards(); renderBeds();
+    // clear selection if moved from current ward
+    if(fromProfileId===currentProfileId && fromWardId===selectedWardId){ selectedBedIds.clear(); selectionMode=false; }
+  }catch{}
 }
 
 // legacy profile panel functions removed
@@ -644,9 +823,35 @@ const profileMenuBtn=document.getElementById('profileMenuBtn');
 const profileMenuPanel=document.getElementById('profileMenuPanel');
 const closeProfilePanelBtn=document.getElementById('closeProfilePanel');
 const profNewBtn=document.getElementById('profNewBtn');
+const profNewSheetBtn=document.getElementById('profNewSheetBtn');
 const profDupBtn=document.getElementById('profDupBtn');
 const profRenBtn=document.getElementById('profRenBtn');
 const profDelBtn=document.getElementById('profDelBtn');
+const profRefreshSheetBtn=document.getElementById('profRefreshSheetBtn');
+
+// Sheet Profile Modal elements
+const sheetProfileModal=document.getElementById('sheetProfileModal');
+const sheetCsvUrl=document.getElementById('sheetCsvUrl');
+const sheetHasHeader=document.getElementById('sheetHasHeader');
+const sheetFetchBtn=document.getElementById('sheetFetchBtn');
+const sheetFetchStatus=document.getElementById('sheetFetchStatus');
+const sheetMapping=document.getElementById('sheetMapping');
+const colWard=document.getElementById('colWard');
+const colBed=document.getElementById('colBed');
+const colName=document.getElementById('colName');
+const colDx=document.getElementById('colDx');
+const appendNameToBed=document.getElementById('appendNameToBed');
+const sheetCancelBtn=document.getElementById('sheetCancelBtn');
+const sheetCreateBtn=document.getElementById('sheetCreateBtn');
+const sheetTableWrap=document.getElementById('sheetTableWrap');
+const sheetTable=document.getElementById('sheetTable');
+let sheetRowsCache=null;
+const pickWardBtn=document.getElementById('pickWardBtn');
+const pickBedBtn=document.getElementById('pickBedBtn');
+const pickNameBtn=document.getElementById('pickNameBtn');
+const pickDxBtn=document.getElementById('pickDxBtn');
+const sheetPickStatus=document.getElementById('sheetPickStatus');
+let pickTarget=null;
 
 function createProfile(name, seedData){
   const pid='p'+Date.now()+Math.floor(Math.random()*1000);
@@ -672,9 +877,164 @@ profileMenuBtn?.addEventListener('click', (e)=>{ e.stopPropagation(); if(profile
 closeProfilePanelBtn?.addEventListener('click', ()=> closeProfilePanel());
 document.addEventListener('click', (e)=>{ const c=document.getElementById('profilesMenu'); if(c && !c.contains(e.target)) closeProfilePanel(); });
 profNewBtn?.addEventListener('click', ()=>{ const name=prompt('New profile name'); if(name==null) return; createProfile(name.trim()||'Untitled', {wards:[]}); });
+profNewSheetBtn?.addEventListener('click', ()=>{ openSheetProfileModal(); });
 profDupBtn?.addEventListener('click', ()=>{ const cur=profileStore.map[currentProfileId]; if(!cur) return; const name=prompt('Duplicate profile as', cur.name+' Copy'); if(name==null) return; createProfile(name.trim()||cur.name+' Copy', cur.data); });
 profRenBtn?.addEventListener('click', ()=>{ const cur=profileStore.map[currentProfileId]; if(!cur) return; const name=prompt('Rename profile', cur.name); if(name==null) return; renameProfile(currentProfileId, name.trim()||cur.name); closeProfilePanel(); });
 profDelBtn?.addEventListener('click', ()=>{ const cur=profileStore.map[currentProfileId]; if(!cur) return; if(!confirm(`Delete profile \"${cur.name}\"?`)) return; deleteProfile(currentProfileId); closeProfilePanel(); });
+profRefreshSheetBtn?.addEventListener('click', ()=>{ refreshCurrentSheetProfile(); });
+
+function openSheetProfileModal(){ sheetProfileModal.style.display='flex'; resetSheetModal(); }
+function closeSheetProfileModal(){ sheetProfileModal.style.display='none'; }
+function resetSheetModal(){
+  sheetCsvUrl.value=''; sheetHasHeader.checked=true; sheetFetchStatus.textContent='';
+  sheetMapping.style.display='none'; sheetCreateBtn.disabled=true;
+  ;[colWard,colBed,colName,colDx].forEach(sel=> sel.innerHTML='');
+}
+sheetCancelBtn?.addEventListener('click', closeSheetProfileModal);
+sheetProfileModal?.addEventListener('click', (e)=>{ if(e.target===sheetProfileModal) closeSheetProfileModal(); });
+
+sheetFetchBtn?.addEventListener('click', async ()=>{
+  let url=(sheetCsvUrl.value||'').trim(); if(!url) return alert('Enter CSV URL');
+  url = normalizeGoogleCsvUrl(url);
+  sheetCsvUrl.value = url;
+  sheetFetchStatus.textContent='Fetching...';
+  try{
+    const rows=await fetchCsvRows(url);
+    if(!rows || rows.length===0) throw new Error('No rows');
+    sheetRowsCache = rows;
+    const header = sheetHasHeader.checked? (rows[0]||[]) : (rows[0]||[]);
+    const cols = Math.max(...rows.map(r=>r.length));
+    function fill(sel){ sel.innerHTML=''; for(let i=0;i<cols;i++){ const opt=document.createElement('option'); const label=(header[i]||'').toString().trim(); opt.value=String(i); opt.textContent = `Col ${i+1}${label? ' - '+label:''}`; sel.appendChild(opt); } }
+    fill(colWard); fill(colBed); fill(colName); fill(colDx);
+    // Heuristic preselect by header names (Thai + English)
+    const hRaw=header.map(x=> (x||'').toString().trim());
+    const hLower=hRaw.map(x=> x.toLowerCase());
+    function findIdx(keys){
+      // exact match first
+      for(let i=0;i<hLower.length;i++){ if(keys.some(k=> hLower[i]===k)) return i; }
+      // then substring contains
+      for(let i=0;i<hLower.length;i++){ if(keys.some(k=> hLower[i].includes(k))) return i; }
+      return null;
+    }
+    const wardIdx=findIdx(['ตึก','ward','วอร์ด','ward/']); if(wardIdx!=null) colWard.value=String(wardIdx);
+    const bedIdx=findIdx(['เตียง','bed','room','ห้อง']); if(bedIdx!=null) colBed.value=String(bedIdx);
+    const nameIdx=findIdx(['ชื่อ','name','patient']); if(nameIdx!=null) colName.value=String(nameIdx);
+    const dxIdx=findIdx(['diagnosis','dx','diag','โรค','diagn']); if(dxIdx!=null) colDx.value=String(dxIdx);
+    sheetMapping.style.display='block';
+    sheetFetchStatus.textContent='Columns loaded';
+    sheetCreateBtn.disabled=false;
+    renderSheetPreview();
+    highlightSheetPreview();
+  }catch(err){ sheetFetchStatus.textContent='Failed: '+err.message; }
+});
+
+sheetHasHeader?.addEventListener('change', ()=>{ if(sheetRowsCache){ renderSheetPreview(); highlightSheetPreview(); } });
+;[colWard,colBed,colName,colDx].forEach(sel=> sel?.addEventListener('change', highlightSheetPreview));
+
+function renderSheetPreview(){
+  const rows = sheetRowsCache||[];
+  const hasHeader = !!sheetHasHeader.checked;
+  const cols = rows.reduce((m,r)=>Math.max(m, r.length), 0);
+  const thead=[]; const tbody=[];
+  if(hasHeader){
+    thead.push('<thead><tr>');
+    for(let c=0;c<cols;c++){ const txt=((rows[0]||[])[c]||''); thead.push(`<th data-col=\"${c}\" style=\"position:sticky;top:0;background:#fafafa;border:1px solid #ddd;padding:4px;\">${escapeHtml(txt)}</th>`); }
+    thead.push('</tr></thead>');
+  }
+  tbody.push('<tbody>');
+  const start = hasHeader? 1 : 0;
+  for(let r=start;r<rows.length;r++){
+    const row=rows[r]||[]; tbody.push('<tr>');
+    for(let c=0;c<cols;c++){
+      const txt=(row[c]||'');
+      tbody.push(`<td data-col="${c}" style="border:1px solid #eee;padding:4px;">${escapeHtml(txt)}</td>`);
+    }
+    tbody.push('</tr>');
+  }
+  tbody.push('</tbody>');
+  sheetTable.innerHTML = thead.join('') + tbody.join('');
+}
+
+function escapeHtml(s){ return (''+s).replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
+
+function highlightSheetPreview(){
+  if(!sheetTable) return;
+  const wardIdx = parseInt(colWard.value||'-1');
+  const bedIdx = parseInt(colBed.value||'-1');
+  const nameIdx = colName.value!==''? parseInt(colName.value) : -1;
+  const dxIdx = colDx.value!==''? parseInt(colDx.value) : -1;
+  const colors = {};
+  if(!Number.isNaN(wardIdx) && wardIdx>=0) colors[wardIdx] = '#e7f3ff';
+  if(!Number.isNaN(bedIdx) && bedIdx>=0) colors[bedIdx] = '#e7ffe7';
+  if(!Number.isNaN(nameIdx) && nameIdx>=0) colors[nameIdx] = '#fff7e0';
+  if(!Number.isNaN(dxIdx) && dxIdx>=0) colors[dxIdx] = '#ffe7e7';
+  // reset all cells
+  sheetTable.querySelectorAll('td,th').forEach(el=> el.style.background='');
+  // color headers
+  sheetTable.querySelectorAll('thead th').forEach((th,i)=>{ if(colors[i]) th.style.background = colors[i]; });
+  // color body cells by column index
+  sheetTable.querySelectorAll('tbody td').forEach(td=>{ const c=parseInt(td.getAttribute('data-col')||'-1'); if(colors[c]) td.style.background=colors[c]; });
+}
+
+function startPick(target){
+  pickTarget=target;
+  if(sheetPickStatus){
+    const label = target==='ward'?'Ward': target==='bed'?'Bed/Room': target==='name'?'Name':'Dx';
+    sheetPickStatus.textContent = `Click a column to set ${label}`;
+    sheetPickStatus.style.display = 'block';
+  }
+  sheetTableWrap?.classList.add('picking');
+}
+function stopPick(){
+  pickTarget=null;
+  if(sheetPickStatus){ sheetPickStatus.style.display='none'; }
+  sheetTableWrap?.classList.remove('picking');
+}
+pickWardBtn?.addEventListener('click', ()=> startPick('ward'));
+pickBedBtn?.addEventListener('click', ()=> startPick('bed'));
+pickNameBtn?.addEventListener('click', ()=> startPick('name'));
+pickDxBtn?.addEventListener('click', ()=> startPick('dx'));
+
+sheetTable?.addEventListener('click', (e)=>{
+  if(!pickTarget) return;
+  const cell = e.target.closest('td,th'); if(!cell) return;
+  const idxAttr = cell.getAttribute('data-col');
+  if(idxAttr==null) return;
+  const idx = parseInt(idxAttr);
+  if(Number.isNaN(idx)) return;
+  if(pickTarget==='ward') colWard.value=String(idx);
+  else if(pickTarget==='bed') colBed.value=String(idx);
+  else if(pickTarget==='name') colName.value=String(idx);
+  else if(pickTarget==='dx') colDx.value=String(idx);
+  highlightSheetPreview();
+  stopPick();
+});
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') stopPick(); });
+
+sheetCreateBtn?.addEventListener('click', async ()=>{
+  const url=(sheetCsvUrl.value||'').trim(); if(!url) return;
+  const cfg={
+    csvUrl:url,
+    hasHeader: !!sheetHasHeader.checked,
+    wardCol: parseInt(colWard.value||'0'),
+    bedCol: parseInt(colBed.value||'0'),
+    nameCol: colName.value? parseInt(colName.value) : null,
+    dxCol: colDx.value? parseInt(colDx.value) : null,
+    appendNameToBed: !!appendNameToBed.checked
+  };
+  try{
+    const rows=await fetchCsvRows(url);
+    const dataObj=buildDataFromSheetRows(rows, cfg);
+    // create sheet-backed profile
+    const namePrompt=prompt('Profile name', 'Sheet Profile');
+    const pname=(namePrompt||'Sheet Profile').trim();
+    const pid='p'+Date.now()+Math.floor(Math.random()*1000);
+    profileStore.map[pid]={ id: pid, name: pname, data: deepClone(dataObj), sheetConfig: cfg };
+    profileStore.current=pid; currentProfileId=pid; data=deepClone(dataObj);
+    saveProfiles(); refreshProfileUI(); renderWards(); renderBeds(); backToBeds();
+    closeSheetProfileModal(); closeProfilePanel();
+  }catch(err){ alert('Failed to create profile from sheet: '+err.message); }
+});
 document.getElementById('addBedBtn').onclick=(e)=>{
   if(e){ e.preventDefault(); e.stopPropagation(); }
   const w=data.wards.find(w=>w.id===selectedWardId);
@@ -791,6 +1151,163 @@ document.addEventListener('touchend', stopResize);
 loadProfiles();
 refreshProfileUI();
 renderWards();renderBeds();
+
+// ===== Move Bed wiring =====
+const moveBedModal=document.getElementById('moveBedModal');
+const moveProfileSelect=document.getElementById('moveProfileSelect');
+const moveWardSelect=document.getElementById('moveWardSelect');
+const moveNewWardRow=document.getElementById('moveNewWardRow');
+const moveNewWardName=document.getElementById('moveNewWardName');
+const moveCancelBtn=document.getElementById('moveCancelBtn');
+const moveConfirmBtn=document.getElementById('moveConfirmBtn');
+let movingBedCtx=null;
+
+function openMoveBedModal(ctx){
+  // normalize to multiple
+  if(ctx.bedId && !ctx.bedIds) ctx.bedIds=[ctx.bedId];
+  movingBedCtx = ctx; // { bedIds, fromWardId, fromProfileId }
+  // populate profiles
+  moveProfileSelect.innerHTML='';
+  Object.values(profileStore.map).forEach(p=>{
+    const opt=document.createElement('option'); opt.value=p.id; opt.textContent=p.name; if(p.id===currentProfileId) opt.selected=true; moveProfileSelect.appendChild(opt);
+  });
+  populateMoveWards(moveProfileSelect.value);
+  moveNewWardRow.style.display='none';
+  moveNewWardName.value='';
+  moveBedModal.style.display='flex';
+}
+function closeMoveBedModal(){ moveBedModal.style.display='none'; movingBedCtx=null; }
+function populateMoveWards(profileId){
+  moveWardSelect.innerHTML='';
+  const p=profileStore.map[profileId];
+  const wards=(p?.data?.wards)||[];
+  wards.forEach(w=>{ const opt=document.createElement('option'); opt.value=w.id; opt.textContent=w.name; moveWardSelect.appendChild(opt); });
+  const optNew=document.createElement('option'); optNew.value='__new__'; optNew.textContent='— Create new ward —'; moveWardSelect.appendChild(optNew);
+  moveWardSelect.value = wards[0]?.id || '__new__';
+  moveNewWardRow.style.display = (moveWardSelect.value==='__new__')? 'flex' : 'none';
+}
+moveProfileSelect?.addEventListener('change', ()=> populateMoveWards(moveProfileSelect.value));
+moveWardSelect?.addEventListener('change', ()=>{ moveNewWardRow.style.display = (moveWardSelect.value==='__new__')? 'flex' : 'none'; });
+moveCancelBtn?.addEventListener('click', ()=> closeMoveBedModal());
+moveBedModal?.addEventListener('click', (e)=>{ if(e.target===moveBedModal) closeMoveBedModal(); });
+moveConfirmBtn?.addEventListener('click', ()=>{
+  if(!movingBedCtx) return;
+  const destPid=moveProfileSelect.value;
+  const destWid=moveWardSelect.value;
+  let destProfile=profileStore.map[destPid]; if(!destProfile){ alert('Destination profile not found'); return; }
+  // ensure destination ward
+  let destWardId=destWid;
+  if(destWid==='__new__'){
+    const name=(moveNewWardName.value||'').trim(); if(!name) return alert('Enter new ward name');
+    const newWard={ id: uuid(), name, beds: [] };
+    destProfile.data.wards.push(newWard); destWardId=newWard.id;
+  }
+  const ids = Array.isArray(movingBedCtx.bedIds)? movingBedCtx.bedIds : (movingBedCtx.bedId? [movingBedCtx.bedId] : []);
+  if(ids.length===0) return;
+  moveBedsBetweenWards(ids, movingBedCtx.fromWardId, movingBedCtx.fromProfileId, destWardId, destPid);
+  closeMoveBedModal();
+  alert(ids.length>1? 'Beds moved' : 'Bed moved');
+});
+
+// ========== Google Sheet profile helpers ==========
+function parseCSV(text){
+  const rows=[]; let cur=[], i=0, c='', q=false, val='';
+  while(i<text.length){
+    c=text[i++];
+    if(q){
+      if(c==='"'){
+        if(text[i]==='"'){ val+='"'; i++; } else { q=false; }
+      } else { val+=c; }
+    } else {
+      if(c==='"'){ q=true; }
+      else if(c===','){ cur.push(val); val=''; }
+      else if(c==='\n'){ cur.push(val); rows.push(cur); cur=[]; val=''; }
+      else if(c==='\r'){ /* ignore */ }
+      else { val+=c; }
+    }
+  }
+  if(val.length>0 || cur.length>0) { cur.push(val); rows.push(cur); }
+  return rows;
+}
+
+function normalizeGoogleCsvUrl(url){
+  try{
+    const u=new URL(url);
+    if(u.hostname.includes('docs.google.com') && u.pathname.includes('/spreadsheets/')){
+      // If already a CSV export/published link, keep
+      if(u.pathname.includes('/export') && (u.searchParams.get('format')||'').toLowerCase()==='csv') return url;
+      if(u.pathname.includes('/pub') && (u.searchParams.get('output')||'').toLowerCase()==='csv') return url;
+      // Transform an edit/view link to CSV export
+      const parts=u.pathname.split('/');
+      const idIdx=parts.indexOf('d');
+      const sheetId = (idIdx>=0 && parts[idIdx+1]) ? parts[idIdx+1] : null;
+      let gid = u.searchParams.get('gid');
+      if(!gid && u.hash && u.hash.includes('gid=')){
+        const m=u.hash.match(/gid=(\d+)/); if(m) gid=m[1];
+      }
+      if(sheetId){
+        const out = new URL(`https://docs.google.com/spreadsheets/d/${sheetId}/export`);
+        out.searchParams.set('format','csv');
+        out.searchParams.set('gid', gid || '0');
+        return out.toString();
+      }
+    }
+  }catch{}
+  return url;
+}
+
+async function fetchCsvRows(url){
+  const res=await fetch(url, { credentials:'omit' });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const ctype=(res.headers.get('content-type')||'').toLowerCase();
+  const txt=await res.text();
+  // Basic validation: avoid accidentally using full HTML Sheet page
+  if(ctype.includes('text/html') || /^\s*<!doctype html|^\s*<html/i.test(txt)){
+    throw new Error('URL returned HTML, not CSV. Use a CSV export link (Publish to web → CSV or /export?format=csv&gid=...)');
+  }
+  return parseCSV(txt);
+}
+
+function buildDataFromSheetRows(rows, opts){
+  const { hasHeader, wardCol, bedCol, nameCol, dxCol, appendNameToBed } = opts;
+  const start = hasHeader? 1 : 0;
+  const wardsMap = new Map();
+  for(let r=start;r<rows.length;r++){
+    const row=rows[r]||[];
+    const ward=(row[wardCol]||'').toString().trim();
+    const bed=(row[bedCol]||'').toString().trim();
+    const name=(nameCol!=null? (row[nameCol]||'').toString().trim(): '');
+    let dx=(dxCol!=null? (row[dxCol]||'').toString(): '').trim();
+    if(!ward && !bed && !name && !dx) continue;
+    let bedName=bed;
+    if(appendNameToBed && name){ bedName = (bedName? (bedName+' ') : '') + name; }
+    // Normalize dx into hashtags, line-separated
+    let tags='';
+    if(dx){
+      const parts = dx.split(/\r?\n|,|;|\|/).map(s=>s.trim()).filter(Boolean);
+      tags = parts.map(s=> s.startsWith('#')? s : '#'+s).join('\n');
+    }
+    if(!wardsMap.has(ward)) wardsMap.set(ward, []);
+    const beds=wardsMap.get(ward);
+    beds.push({ id: uuid(), name: bedName || (name||'Bed'), details: JSON.stringify({ bed: bedName, hashtags: tags, cli:'', mx:'', bt:'', pr:'', rr:'', bp:'', o2:'', io:[{in:[],out:[]},{in:[],out:[]}], preview:'', lastSegments:null }) });
+  }
+  const wards=[...wardsMap.entries()].map(([name,beds])=>({ id: uuid(), name: name||'Ward', beds }));
+  return { wards };
+}
+
+async function refreshCurrentSheetProfile(){
+  const cur=profileStore.map[currentProfileId];
+  if(!cur || !cur.sheetConfig) return alert('Current profile is not configured with a Google Sheet');
+  const cfg={...cur.sheetConfig, csvUrl: normalizeGoogleCsvUrl(cur.sheetConfig.csvUrl)};
+  try{
+    const rows=await fetchCsvRows(cfg.csvUrl);
+    const dataObj=buildDataFromSheetRows(rows, cfg);
+    data = dataObj;
+    saveData(); // persists into profile
+    renderWards(); renderBeds();
+    alert('Sheet refreshed');
+  }catch(err){ alert('Failed to refresh: '+err.message); }
+}
 
 /* Simplified notify editor adapted from test/app.js, scoped to avoid collisions */
 const notifyEditor=(function(){
