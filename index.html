@@ -151,8 +151,12 @@ body.collapsed #expandSidebarBtn{display:none}
   #profilePage .layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
   #profilePage .col { min-width: 0; }
   #profilePage header { padding: 0 0 8px; }
-  #profilePage header h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+  #profilePage header h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; display:inline-flex; align-items:center; gap:8px; }
   #profilePage header .sub { color: var(--muted); font-size: 13px; }
+  /* Header status select styled as pill with color */
+  #profilePage #headerStatusSelect { appearance:none; -webkit-appearance:none; border-radius:999px; padding:4px 10px; font-size:12px; line-height:1.4; border:1px solid #1e2a44; background:#0f1527; color: var(--text); }
+  #profilePage #headerStatusSelect.status-active { background:#e7ffe7; color:#056105; border-color:#bfe6bf; }
+  #profilePage #headerStatusSelect.status-discharge { background:#ffe7e7; color:#8a0000; border-color:#f0bcbc; }
   #profilePage main { max-width: 920px; margin: 0 auto 20px; padding: 0; }
   #profilePage .card {
     background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.00));
@@ -213,7 +217,7 @@ body.collapsed #expandSidebarBtn{display:none}
     box-shadow: 0 -12px 30px rgba(0,0,0,0.35);
     transform: translateY(100%);
     transition: transform 0.25s ease; z-index: 1002;
-    display: flex; flex-direction: column;
+    display: flex; flex-direction: column; will-change: height, transform; backface-visibility: hidden; -webkit-font-smoothing: antialiased;
   }
   body.collapsed #profilePage .mobile-preview-sheet { left: 0; }
   #profilePage .mobile-preview-sheet.open { transform: translateY(0); }
@@ -221,11 +225,11 @@ body.collapsed #expandSidebarBtn{display:none}
   #profilePage .mobile-preview-sheet .sheet-header .grabber{ width: 42px; height: 6px; background: #2a3a5a; border-radius: 3px; margin-right: 8px; cursor: ns-resize; }
   #profilePage .mobile-preview-sheet .title { font-weight: 600; color: var(--muted); }
   #profilePage .mobile-preview-sheet .sheet-actions { display: flex; gap: 8px; }
-  #profilePage .mobile-preview-sheet .sheet-body { padding: 10px 12px; overflow: auto; display:flex; min-height: 0; }
+  #profilePage .mobile-preview-sheet .sheet-body { padding: 10px 12px; overflow: auto; display:flex; min-height: 0; backface-visibility: hidden; transform: translateZ(0); }
   #profilePage .fab-preview { position: fixed; right: 16px; bottom: 16px; z-index: 1003; padding: 10px 14px; background: var(--accent); border: 0; color: #03122b; font-weight: 700; border-radius: 22px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
   #profilePage .fab-reset { position: fixed; left: 280px; bottom: 16px; z-index: 1003; padding: 10px 14px; background: #ff7676; border: 0; color: #2b0202; font-weight: 700; border-radius: 22px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
   body.collapsed #profilePage .fab-reset { left: 16px; }
-  #profilePage pre.preview{ flex:1; height: 100%; min-height: 100%; }
+  #profilePage pre.preview{ flex:1; min-height: 0; backface-visibility: hidden; transform: translateZ(0); }
   /* Make the built-in back button stick with the Quick Ward Note content */
   #profilePage #backToBedsBtn{ position: sticky; top: 12px; align-self: flex-start; z-index: 3; }
   @media (max-width: 979px){
@@ -294,7 +298,12 @@ body.collapsed #expandSidebarBtn{display:none}
     <div id="profilePage" style="display:none;flex-direction:column;padding:16px;overflow-y:auto;width:100%;">
       <button id="backToBedsBtn" style="margin-bottom:12px;">← Back to Beds</button>
     <header>
-      <h1>Quick Ward Note</h1>
+      <h1>Quick Ward Note
+        <select id="headerStatusSelect" style="margin-left:6px;">
+          <option value="active">Active</option>
+          <option value="discharge">Discharge</option>
+        </select>
+      </h1>
       <div class="sub">Fast template for bedside updates</div>
     </header>
 
@@ -306,6 +315,14 @@ body.collapsed #expandSidebarBtn{display:none}
             <div class="row">
               <label>Bed/Room
                 <input id="bed" placeholder="e.g., กว6/1 รวม3 — ชื่อผู้ป่วย" />
+              </label>
+            </div>
+            <div class="row">
+              <label>Status
+                <select id="statusSelect" style="min-width:140px;">
+                  <option value="active">Active</option>
+                  <option value="discharge">Discharge</option>
+                </select>
               </label>
             </div>
             <label>Hashtags / Dx (multiline)
@@ -529,6 +546,10 @@ let suppressBedClickUntil=0;
 let profileStore={ current: null, map:{} };
 let currentProfileId=null;
 function deepClone(o){ return JSON.parse(JSON.stringify(o||{})); }
+function getCurrentStatusFilter(){
+  const v=localStorage.getItem(STATUS_FILTER_KEY)||'both';
+  return (v==='active'||v==='discharge')? v : 'both';
+}
 function saveProfiles(){
   if(!currentProfileId){ return; }
   // persist current working data into store before saving
@@ -610,7 +631,15 @@ function renderWards(){
   const ul=document.getElementById('wardList');ul.innerHTML='';
   data.wards.forEach(w=>{
     const li=document.createElement('li');
-    li.textContent=w.name+' ('+w.beds.length+' beds)';
+    // count beds by current status filter
+    const filter=getCurrentStatusFilter();
+    const count=(w.beds||[]).filter(b=>{
+      const st=(b.status==='discharge')?'discharge':'active';
+      if(filter==='active') return st!=='discharge';
+      if(filter==='discharge') return st==='discharge';
+      return true;
+    }).length;
+    li.textContent=w.name+' ('+count+' beds)';
     if(w.id===selectedWardId)li.classList.add('selected');
     li.onclick=()=>{selectedWardId=w.id;selectedBedId=null;renderWards();renderBeds(); backToBeds();};
     li.draggable=true;
@@ -672,7 +701,7 @@ function renderBeds(){
   title.textContent='Ward: '+ward.name;addBtn.disabled=false;
   // apply status filter
   const currentFilter = (localStorage.getItem(STATUS_FILTER_KEY)||'both');
-  if(statusSel){ statusSel.value=currentFilter; statusSel.onchange=()=>{ localStorage.setItem(STATUS_FILTER_KEY, statusSel.value); renderBeds(); }; }
+  if(statusSel){ statusSel.value=currentFilter; statusSel.onchange=()=>{ localStorage.setItem(STATUS_FILTER_KEY, statusSel.value); renderWards(); renderBeds(); }; }
   const bedsToShow = ward.beds.filter(b=>{
     const st=(b.status||'active');
     if(currentFilter==='active') return st!=='discharge';
@@ -713,9 +742,10 @@ function renderBeds(){
   line1.textContent = header;
   // status badge
   const st = (b.status==='discharge') ? 'discharge' : 'active';
-  const badge=document.createElement('span');
+    const badge=document.createElement('span');
   badge.className = 'status-badge ' + (st==='discharge' ? 'status-discharge' : 'status-active');
   badge.textContent = st==='discharge' ? 'Discharge' : 'Active';
+    // non-interactive in list to avoid accidental changes; edit inside Quick Ward Note instead
   line1.appendChild(badge);
     // compute diagnosis hashtags from bed.details
     let dxText='';
@@ -746,9 +776,6 @@ function renderBeds(){
   selectBox.type='checkbox'; selectBox.className='select-box'; selectBox.style.display= selectionMode? 'inline-block':'none';
   selectBox.checked = selectedBedIds.has(b.id);
   selectBox.addEventListener('click', (e)=>{ e.stopPropagation(); toggleBedSelection(b.id, div, e.target.checked); });
-    const editBtn=document.createElement('button');
-    editBtn.textContent='Edit';
-    editBtn.onclick=(e)=>{ e.stopPropagation(); openProfilePage(b); };
     const moveBtn=document.createElement('button');
     moveBtn.textContent='Move';
     moveBtn.onclick=(e)=>{ e.stopPropagation(); openMoveBedModal({ bedId: b.id, fromWardId: ward.id, fromProfileId: currentProfileId }); };
@@ -756,9 +783,9 @@ function renderBeds(){
     delBtn.className='delete';
     delBtn.textContent='Delete';
     delBtn.onclick=()=>{if(!confirm('Delete this bed?'))return;
-      ward.beds.splice(i,1);saveData();renderBeds();renderWards();};
+      const idxAll=ward.beds.findIndex(x=>x.id===b.id); if(idxAll>-1){ ward.beds.splice(idxAll,1); saveData(); renderBeds(); renderWards(); }
+    };
   actions.appendChild(selectBox);
-  actions.appendChild(editBtn);
     actions.appendChild(moveBtn);
     actions.appendChild(delBtn);
     div.appendChild(textDiv);
@@ -967,7 +994,7 @@ sheetFetchBtn?.addEventListener('click', async ()=>{
   let url=(sheetCsvUrl.value||'').trim(); if(!url) return alert('Enter CSV URL');
   url = normalizeGoogleCsvUrl(url);
   sheetCsvUrl.value = url;
-  sheetFetchStatus.textContent='Fetching...';
+  sheetFetchStatus.textContent='Fetching columns…';
   try{
     const rows=await fetchCsvRows(url);
     if(!rows || rows.length===0) throw new Error('No rows');
@@ -996,7 +1023,7 @@ sheetFetchBtn?.addEventListener('click', async ()=>{
     sheetCreateBtn.disabled=false;
     renderSheetPreview();
     highlightSheetPreview();
-  }catch(err){ sheetFetchStatus.textContent='Failed: '+err.message; }
+  }catch(err){ sheetFetchStatus.textContent='Failed to fetch: '+err.message; }
 });
 
 sheetHasHeader?.addEventListener('change', ()=>{ if(sheetRowsCache){ renderSheetPreview(); highlightSheetPreview(); } });
@@ -1333,15 +1360,43 @@ function normalizeGoogleCsvUrl(url){
 }
 
 async function fetchCsvRows(url){
-  const res=await fetch(url, { credentials:'omit' });
-  if(!res.ok) throw new Error('HTTP '+res.status);
-  const ctype=(res.headers.get('content-type')||'').toLowerCase();
-  const txt=await res.text();
-  // Basic validation: avoid accidentally using full HTML Sheet page
-  if(ctype.includes('text/html') || /^\s*<!doctype html|^\s*<html/i.test(txt)){
-    throw new Error('URL returned HTML, not CSV. Use a CSV export link (Publish to web → CSV or /export?format=csv&gid=...)');
+  // Add cache-busting to avoid stale cached responses
+  const finalUrl = url + (url.includes('?')? '&' : '?') + 'cachebust=' + Date.now();
+  let lastErr=null;
+  for(let attempt=1; attempt<=3; attempt++){
+    try{
+      const res=await fetch(finalUrl, { credentials:'omit', cache:'no-store' });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const ctype=(res.headers.get('content-type')||'').toLowerCase();
+      const txt=await res.text();
+      // Avoid HTML (means wrong link or not public)
+      if(ctype.includes('text/html') || /^\s*<!doctype html|^\s*<html/i.test(txt)){
+        const err=new Error('HTML_RESP'); err.name='HTML_RESP'; throw err;
+      }
+      return parseCSV(txt);
+    }catch(e){
+      lastErr=e; // brief backoff
+      await new Promise(r=> setTimeout(r, attempt*300));
+    }
   }
-  return parseCSV(txt);
+  // Build helpful message
+  if(lastErr){
+    const msg=(lastErr&&lastErr.message)||'';
+    if(msg.includes('HTML_RESP')){
+      throw new Error('URL returned HTML, not CSV. Publish the sheet to the web as CSV or use an /export?format=csv&gid=… link that is publicly accessible.');
+    }
+    if(/HTTP 403/.test(msg)){
+      throw new Error('HTTP 403 (Forbidden). Make sure the sheet is public: File → Share → Publish to web (CSV) or set Anyone with the link → Viewer.');
+    }
+    if(/HTTP 404/.test(msg)){
+      throw new Error('HTTP 404 (Not found). Check the sheet ID/gid in the URL and that the sheet/tab exists.');
+    }
+    if(/HTTP 429/.test(msg)){
+      throw new Error('HTTP 429 (Rate limited). Try again in a moment.');
+    }
+    throw new Error('Failed to fetch CSV ('+msg+'). Check the URL and visibility.');
+  }
+  throw new Error('Failed to fetch CSV (unknown error)');
 }
 
 function buildDataFromSheetRows(rows, opts){
@@ -1670,8 +1725,9 @@ const notifyEditor=(function(){
       // persist as vh
       const hpx = parseFloat(sheet.style.height);
       if(!Number.isNaN(hpx) && window.innerHeight){
-        const vh = (hpx / window.innerHeight) * 100;
-        try{ localStorage.setItem(PREVIEW_H_KEY, String(Math.round(vh))); }catch{}
+          const vh = (hpx / window.innerHeight) * 100;
+          const rounded = Math.round(vh*10)/10; // store to 0.1vh for smoother restore
+          try{ localStorage.setItem(PREVIEW_H_KEY, String(rounded)); }catch{}
       }
     }
     grabber?.addEventListener('mousedown', onStart);
@@ -1753,6 +1809,39 @@ function openProfilePage(bed, opts={}){
     io: d.io || [{in:[],out:[]},{in:[],out:[]}],
     wardName: ward?.name || ''
   });
+  // header status select (always visible)
+  const headerSel=document.getElementById('headerStatusSelect');
+  const applyHeaderStatus=(val)=>{
+    if(!headerSel) return;
+    headerSel.classList.toggle('status-discharge', val==='discharge');
+    headerSel.classList.toggle('status-active', val!=='discharge');
+  };
+  if(headerSel){
+    headerSel.value = (bed.status==='discharge')? 'discharge':'active';
+    applyHeaderStatus(headerSel.value);
+    headerSel.onchange=()=>{
+      const w=data.wards.find(w=>w.id===selectedWardId); if(!w) return;
+      const sb=w.beds.find(x=>x.id===selectedBedId); if(!sb) return;
+      sb.status = headerSel.value;
+      applyHeaderStatus(sb.status);
+      const stSel=document.getElementById('statusSelect'); if(stSel) stSel.value=sb.status;
+      saveData(); renderWards(); renderBeds();
+    };
+  }
+  // init status select
+  const stSel=document.getElementById('statusSelect');
+  if(stSel){
+    stSel.value = (bed.status==='discharge')? 'discharge':'active';
+    stSel.onchange=()=>{
+      const w=data.wards.find(w=>w.id===selectedWardId); if(!w) return;
+      const sb=w.beds.find(x=>x.id===selectedBedId); if(!sb) return;
+      sb.status = stSel.value;
+      // sync header select
+      const headerSel=document.getElementById('headerStatusSelect');
+      if(headerSel){ headerSel.value=sb.status; headerSel.classList.toggle('status-discharge', sb.status==='discharge'); headerSel.classList.toggle('status-active', sb.status!=='discharge'); }
+      saveData(); renderWards(); renderBeds();
+    };
+  }
   // autosave while editing
   notifyEditor.onChange(()=>{
     const ward=data.wards.find(w=>w.id===selectedWardId);
