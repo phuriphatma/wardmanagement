@@ -58,6 +58,11 @@ body.edit-wards #wardList li .ward-delete{opacity:1;pointer-events:auto}
 #bedList .actions-row .delete{border-color:#c00;background:#fee;color:#900}
 #bedList .bed-text .line2{white-space:pre-wrap}
 
+/* Add Bed button: larger and with spacing from list */
+#addBedBtn{display:block;width:100%;padding:12px 14px;font-size:16px;border-radius:8px;border:1px solid #ccc;background:#f7f7f7;margin:8px 0 16px;cursor:pointer}
+#addBedBtn:not(:disabled):hover{background:#f0f0f0}
+#addBedBtn:disabled{opacity:0.6;cursor:not-allowed}
+
 /* Profile panel */
 #profilePanel{width:360px;max-width:100%;padding:16px;overflow-y:auto;display:none;background:#f9fafb}
 #profilePanel.active{display:block}
@@ -402,6 +407,8 @@ const STORAGE_KEY='wardManagerData';
 const WARD_WIDTH_KEY='wardSidebarWidth'; // renamed to avoid redeclare
 const PROFILES_KEY='wardManagerProfiles-v1';
 let data={wards:[]},selectedWardId=null,selectedBedId=null,dragSrcId=null,bedDragSrcId=null;
+// guard to prevent accidental bed open when clicking near "+ Add Bed"
+let suppressBedClickUntil=0;
 
 // Profiles store shape: { current: string, map: { [id]: { id, name, data } } }
 let profileStore={ current: null, map:{} };
@@ -562,6 +569,13 @@ function renderBeds(){
     line2.textContent = dxText;
     textDiv.appendChild(line1);
     textDiv.appendChild(line2);
+    // allow tap anywhere on the bed block to edit (except buttons)
+    div.addEventListener('click',(ev)=>{
+      if(performance && performance.now && performance.now() < suppressBedClickUntil) return;
+      if(ev.target.closest('button')) return; // buttons handle their own click
+      openProfilePage(b);
+    });
+
     const actions=document.createElement('div');
     actions.className='actions-row';
     const editBtn=document.createElement('button');
@@ -661,11 +675,17 @@ profNewBtn?.addEventListener('click', ()=>{ const name=prompt('New profile name'
 profDupBtn?.addEventListener('click', ()=>{ const cur=profileStore.map[currentProfileId]; if(!cur) return; const name=prompt('Duplicate profile as', cur.name+' Copy'); if(name==null) return; createProfile(name.trim()||cur.name+' Copy', cur.data); });
 profRenBtn?.addEventListener('click', ()=>{ const cur=profileStore.map[currentProfileId]; if(!cur) return; const name=prompt('Rename profile', cur.name); if(name==null) return; renameProfile(currentProfileId, name.trim()||cur.name); closeProfilePanel(); });
 profDelBtn?.addEventListener('click', ()=>{ const cur=profileStore.map[currentProfileId]; if(!cur) return; if(!confirm(`Delete profile \"${cur.name}\"?`)) return; deleteProfile(currentProfileId); closeProfilePanel(); });
-document.getElementById('addBedBtn').onclick=()=>{
+document.getElementById('addBedBtn').onclick=(e)=>{
+  if(e){ e.preventDefault(); e.stopPropagation(); }
   const w=data.wards.find(w=>w.id===selectedWardId);
   if(!w)return;
-  w.beds.push({id:uuid(),name:'New Bed',details:'{}'});
+  const newBed={id:uuid(),name:'New Bed',details:'{}'};
+  w.beds.push(newBed);
   saveData();renderBeds();renderWards();
+  // Temporarily suppress bed click handlers in case of retarget after reflow
+  try{ if(performance && performance.now) suppressBedClickUntil = performance.now() + 300; }catch{}
+  // Open editor immediately and select the bed name for quick rename
+  setTimeout(()=> openProfilePage(newBed,{focusBed:true,selectBed:true}), 0);
 };
 document.getElementById('exportBtn').onclick=()=>{
   const pass=prompt('Export password');if(pass==null)return;
@@ -692,33 +712,61 @@ document.getElementById('fileInput').onchange=e=>{
 
 document.getElementById('expandSidebarBtn').onclick=()=>document.body.classList.remove('collapsed');
 
-/* Swipe to hide/show sidebar */
-let startX=null,startY=null;
-document.addEventListener('touchstart',e=>{startX=e.touches[0].clientX;startY=e.touches[0].clientY;},{passive:true});
+/* Swipe to hide/show sidebar.
+   Goals: 
+   - Expand on swipe-right from anywhere when collapsed (more sensitive, like IG/TikTok)
+   - Collapse on swipe-left only when starting well inside content (avoid accidental while resizing)
+   - Ignore gestures starting in sidebar/resizer and while resizing
+   - Consider velocity OR distance to feel responsive */
+let swipeStart=null;
+const SWIPE_MIN_DISTANCE=30; // px
+const SWIPE_MIN_VELOCITY=0.45; // px per ms (e.g., 45px in 100ms)
+const SWIPE_DIR_RATIO=1.1; // require horizontal dominance: |dx| > |dy|*ratio
+document.addEventListener('touchstart',e=>{
+  const t=e.touches[0];
+  const target=e.target;
+  const inSidebar=!!(target.closest && (target.closest('#sidebar')||target.closest('#resizer')));
+  const sidebarEl=document.getElementById('sidebar');
+  const sbw=sidebarEl? sidebarEl.getBoundingClientRect().width : 0;
+  swipeStart={ x:t.clientX, y:t.clientY, inSidebar, sbw, t0:(performance&&performance.now?performance.now():Date.now()) };
+},{passive:true});
 document.addEventListener('touchend',e=>{
-  if(startX===null)return;
-  const dx=e.changedTouches[0].clientX-startX,dy=e.changedTouches[0].clientY-startY;
-  if(Math.abs(dx)>Math.abs(dy)){
-    if(dx<-50)document.body.classList.add('collapsed');
-    else if(dx>50)document.body.classList.remove('collapsed');
+  if(!swipeStart) return;
+  const {x: sx, y: sy, inSidebar, sbw, t0} = swipeStart;
+  swipeStart=null;
+  // ignore if gesture started in sidebar/resizer or while resizing
+  if(inSidebar || window.__isResizingSidebar__) return;
+  const t=e.changedTouches[0];
+  const dx=t.clientX - sx, dy=t.clientY - sy;
+  const dt=(performance&&performance.now?performance.now():Date.now()) - (t0||0);
+  const vel = dt>0 ? Math.abs(dx)/dt : 0;
+  if(Math.abs(dx) > Math.abs(dy)*SWIPE_DIR_RATIO){
+    const isCollapsed=document.body.classList.contains('collapsed');
+    const fastRight = dx>0 && vel>SWIPE_MIN_VELOCITY;
+    const farRight = dx>SWIPE_MIN_DISTANCE;
+    const fastLeft = dx<0 && vel>SWIPE_MIN_VELOCITY;
+    const farLeft = dx<-SWIPE_MIN_DISTANCE;
+    // collapse only if started well inside content (not right next to sidebar border)
+    if(!isCollapsed && (farLeft || fastLeft) && sx > sbw + 30){ document.body.classList.add('collapsed'); }
+    // expand from anywhere when collapsed (distance OR velocity)
+    else if(isCollapsed && (farRight || fastRight)){ document.body.classList.remove('collapsed'); }
   }
-  startX=null;startY=null;
 },{passive:true});
 
 const sidebar = document.getElementById('sidebar');
 const resizer = document.getElementById('resizer');
-let resizing = false;
+let isResizingSidebar = false; window.__isResizingSidebar__ = false;
 
 // Load saved width
 const savedW = localStorage.getItem(WARD_WIDTH_KEY);
 if (savedW) sidebar.style.width = savedW + 'px';
 
 function startResize(e) {
-  resizing = true;
+  isResizingSidebar = true; window.__isResizingSidebar__ = true;
   document.body.style.userSelect = 'none';
 }
 function doResize(e) {
-  if (!resizing) return;
+  if (!isResizingSidebar) return;
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const containerLeft = document.getElementById('container').getBoundingClientRect().left;
   let newWidth = clientX - containerLeft;
@@ -727,9 +775,9 @@ function doResize(e) {
   sidebar.style.width = newWidth + 'px';
 }
 function stopResize() {
-  if (!resizing) return;
+  if (!isResizingSidebar) return;
   localStorage.setItem(WARD_WIDTH_KEY, parseInt(sidebar.style.width));
-  resizing = false;
+  isResizingSidebar = false; window.__isResizingSidebar__ = false;
   document.body.style.userSelect = '';
 }
 resizer.addEventListener('mousedown', startResize);
@@ -785,10 +833,13 @@ const notifyEditor=(function(){
     const kindInput=el('input',{class:'kind',placeholder:kind==='in'?'oral / ivf / นม / ...':'urine / drain / ...'});
     const displayInput=el('input',{class:'display',placeholder:'e.g., 500+ท1'});
     const amount=el('input',{class:'amount',inputmode:'decimal',placeholder:'500'});
-    const rm=el('button',{class:'remove',onclick:()=>{ line.remove(); recalc(container.closest('.io-block')); }},'×');
+    const rm=el('button',{class:'remove',onclick:()=>{ line.remove(); recalc(container.closest('.io-block')); if(changeCb) changeCb(); }},'×');
     line.append(kindInput,displayInput,amount,rm);
     container.appendChild(line);
-    amount.addEventListener('input',()=>recalc(container.closest('.io-block')));
+    // Any change in IO should autosave
+    amount.addEventListener('input',()=>{ recalc(container.closest('.io-block')); if(changeCb) changeCb(); });
+    kindInput.addEventListener('input',()=>{ updatePreview(); if(changeCb) changeCb(); });
+    displayInput.addEventListener('input',()=>{ updatePreview(); if(changeCb) changeCb(); });
   }
   function gatherIO(blockEl){
     const read=cls=>Array.from(blockEl.querySelectorAll(`.lines.${cls} .io-line`)).map(line=>({
@@ -946,7 +997,8 @@ const notifyEditor=(function(){
     const closeSheet=document.getElementById('closeSheet');
     const copyMobile=document.getElementById('copyMobile');
     const grabber=document.getElementById('sheetGrabber');
-    const PREVIEW_H_KEY='notify-preview-height-v1';
+  const PREVIEW_H_KEY='notify-preview-height-v1';
+  const PREVIEW_OPEN_KEY='notify-preview-open-v1';
     // apply saved height
     try{
       const saved=localStorage.getItem(PREVIEW_H_KEY);
@@ -965,8 +1017,9 @@ const notifyEditor=(function(){
       const out=document.getElementById('output');
       if(out && out.parentElement!==mobileBody) mobileBody.appendChild(out);
       sheet.classList.add('open');
+      try{ localStorage.setItem(PREVIEW_OPEN_KEY,'true'); }catch{}
     }
-    function closeSheetFn(){ sheet.classList.remove('open'); }
+    function closeSheetFn(){ sheet.classList.remove('open'); try{ localStorage.setItem(PREVIEW_OPEN_KEY,'false'); }catch{} }
   toggleBtn?.addEventListener('click', ()=>{ if(sheet.classList.contains('open')) closeSheetFn(); else openSheet(); });
     closeSheet?.addEventListener('click', ()=> closeSheetFn());
     copyMobile?.addEventListener('click', async ()=>{
@@ -978,7 +1031,13 @@ const notifyEditor=(function(){
       if(!isEditing && sel && sel.isCollapsed){ closeSheetFn(); }
     });
     let openedOnce=false; const origUpdate=updatePreview;
-    updatePreview=function(){ origUpdate(); if(!openedOnce){ sheet.classList.add('open'); openedOnce=true; } };
+    // Respect saved open/closed state; if no state saved, auto-open once on first edit
+    try{
+      const savedOpen=localStorage.getItem(PREVIEW_OPEN_KEY);
+      if(savedOpen==='true'){ openSheet(); openedOnce=true; }
+      else if(savedOpen==='false'){ sheet.classList.remove('open'); openedOnce=true; }
+    }catch{}
+    updatePreview=function(){ origUpdate(); if(!openedOnce){ openSheet(); openedOnce=true; } };
     document.getElementById('output').addEventListener('input', ()=>{ /* keep live edits */ if(changeCb) changeCb(); });
     // drag to resize preview height
     let resizing=false; let startY=0; let startH=0;
@@ -1073,7 +1132,7 @@ const profilePage=document.getElementById('profilePage');
 const backToBedsBtn=document.getElementById('backToBedsBtn');
 const saveBtn=document.getElementById('saveProfileBtn');
 
-function openProfilePage(bed){
+function openProfilePage(bed, opts={}){
   selectedBedId=bed.id;
   // Load existing bed.details (JSON) into editor
   let d={};
@@ -1103,6 +1162,13 @@ function openProfilePage(bed){
     renderWards();
     renderBeds();
   });
+  // Focus and select bed field if requested
+  if(opts?.focusBed || opts?.selectBed){
+    setTimeout(()=>{
+      const bedInput=document.getElementById('bed');
+      if(bedInput){ bedInput.focus(); if(opts.selectBed) bedInput.select(); }
+    }, 50);
+  }
 }
 
 function backToBeds(){
