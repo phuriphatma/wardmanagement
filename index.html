@@ -251,6 +251,8 @@ body.collapsed #expandSidebarBtn{display:none}
     }
   }
 </style>
+<!-- SheetJS for parsing XLSX tab names -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <div id="container">
@@ -510,6 +512,10 @@ body.collapsed #expandSidebarBtn{display:none}
         <input id="sheetTabName" placeholder="e.g., Gen3 ตึกเก่า" />
       </label>
       <div style="color:#777; font-size:12px; min-width:160px;">Press Enter to load by name, or paste a URL with gid=…</div>
+    </div>
+    <div id="sheetTabNamesWrap" style="display:none; margin-top:6px;">
+      <div style="font-size:12px; color:#666; margin-bottom:4px;">Tabs (click to load):</div>
+      <div id="sheetTabChips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
     </div>
     <div id="sheetMapping" style="display:none; margin-top:12px;">
       <div class="row">
@@ -1034,6 +1040,8 @@ const sheetFetchBtn=document.getElementById('sheetFetchBtn');
 const sheetFetchStatus=document.getElementById('sheetFetchStatus');
 const sheetTabsRow=document.getElementById('sheetTabsRow');
 const sheetTabName=document.getElementById('sheetTabName');
+const sheetTabNamesWrap=document.getElementById('sheetTabNamesWrap');
+const sheetTabChips=document.getElementById('sheetTabChips');
 const sheetMapping=document.getElementById('sheetMapping');
 const colWard=document.getElementById('colWard');
 const colBed=document.getElementById('colBed');
@@ -1110,6 +1118,25 @@ sheetFetchBtn?.addEventListener('click', async ()=>{
   sheetCsvUrl.value = url;
   sheetFetchStatus.textContent='Fetching columns…';
   try{
+    // Try to fetch and display tab names via XLSX export
+    try{
+      const sid2 = sid || extractSheetId(url);
+      if(sid2 && window.XLSX){
+        const names = await fetchSheetTabNamesXlsx(sid2);
+        if(Array.isArray(names) && names.length){
+          if(sheetTabNamesWrap) sheetTabNamesWrap.style.display='block';
+          if(sheetTabChips){
+            sheetTabChips.innerHTML='';
+            names.forEach(n=>{
+              const chip=document.createElement('button');
+              chip.type='button'; chip.textContent=n; chip.style.cssText='padding:4px 8px;border-radius:999px;border:1px solid #ccd6e6;background:#f6f8ff;color:#1a2750;font-size:12px;';
+              chip.onclick=()=>{ if(sheetTabName) sheetTabName.value=n; loadByTabName(n, sid2); };
+              sheetTabChips.appendChild(chip);
+            });
+          }
+        }
+      }
+    }catch{}
     const rows=await fetchCsvRows(url);
     if(!rows || rows.length===0) throw new Error('No rows');
     sheetRowsCache = rows;
@@ -1159,6 +1186,34 @@ sheetTabName?.addEventListener('keydown', async (e)=>{
     sheetFetchStatus.textContent='Columns loaded (tab name)';
   }catch(err){ sheetFetchStatus.textContent='Failed (tab name): '+(err?.message||err); }
 });
+
+// Helper to load by tab name programmatically (used by chips)
+async function loadByTabName(name, sidOverride){
+  const base=(sheetCsvUrl.value||'').trim();
+  const sid = sidOverride || extractSheetId(base);
+  if(!sid || !name) return;
+  const gviz=`https://docs.google.com/spreadsheets/d/${sid}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`;
+  sheetCsvUrl.value = gviz;
+  sheetFetchStatus.textContent='Fetching tab: '+name+'…';
+  try{
+    const rows=await fetchCsvRows(gviz);
+    sheetRowsCache=rows;
+    sheetMapping.style.display='block'; sheetCreateBtn.disabled=false;
+    renderSheetPreview(); highlightSheetPreview();
+    sheetFetchStatus.textContent='Columns loaded ("'+name+'")';
+  }catch(err){ sheetFetchStatus.textContent='Failed to load "'+name+'": '+(err?.message||err); }
+}
+
+// Fetch tab names via XLSX export
+async function fetchSheetTabNamesXlsx(sheetId){
+  const xurl=`https://docs.google.com/spreadsheets/d/${sheetId}/export?format=xlsx`;
+  const res=await fetch(xurl, { credentials:'omit', cache:'no-store' });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const buf=await res.arrayBuffer();
+  if(!window.XLSX) throw new Error('XLSX library not loaded');
+  const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+  return (wb && Array.isArray(wb.SheetNames))? wb.SheetNames : [];
+}
 
 sheetHasHeader?.addEventListener('change', ()=>{ if(sheetRowsCache){ renderSheetPreview(); highlightSheetPreview(); } });
 ;[colWard,colBed,colName,colDx,colStatus,colHN].forEach(sel=> sel?.addEventListener('change', highlightSheetPreview));
