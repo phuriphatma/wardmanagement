@@ -251,6 +251,20 @@ body.collapsed #expandSidebarBtn{display:none}
     }
   }
 </style>
+<style>
+  /* WardWork mobile-friendly tweaks */
+  #wardWorkPage .row input,
+  #wardWorkPage .row select,
+  #wardWorkPage .row button { min-height: 36px; }
+  @media (max-width: 640px){
+    #wardWorkPage .row{ flex-direction: column; align-items: stretch !important; }
+    #wardWorkPage .row > label{ width:100%; }
+    #wardWorkPage .row input,
+    #wardWorkPage .row select,
+    #wardWorkPage .row button{ width:100% !important; }
+    #wardWorkPage .row .save-btn{ width:100% !important; }
+  }
+</style>
 <!-- SheetJS for parsing XLSX tab names -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -261,6 +275,7 @@ body.collapsed #expandSidebarBtn{display:none}
       <button id="addWardBtn">+ Add Ward</button>
       <button id="editWardsBtn">Edit Wards</button>
       <button id="presetsBtn">Presets</button>
+  <button id="wardWorkBtn">WardWork</button>
       <!-- Compact Profiles control -->
       <div id="profilesMenu" style="position:relative; margin-left:auto;">
         <button id="profileMenuBtn" class="ghost" style="border:1px solid #ddd; padding:6px 10px; border-radius:6px;">Profile</button>
@@ -292,6 +307,50 @@ body.collapsed #expandSidebarBtn{display:none}
   </div>
   <div id="resizer"></div>
   <div id="main">
+    <!-- Ward Work View -->
+    <div id="wardWorkPage" style="display:none;flex-direction:column;padding:16px;overflow-y:auto;width:100%;">
+      <button id="backToBedsFromWW" style="margin-bottom:12px;">← Back</button>
+      <header>
+        <h2>Ward Work</h2>
+        <div style="color:#666;font-size:12px;margin-top:4px;">Fast list for daily wardwork tasks</div>
+      </header>
+      <section class="card" style="max-width:720px;">
+        <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <label style="flex:1;min-width:160px;">Date
+            <input type="date" id="wwDate" />
+          </label>
+          <label style="flex:1.4;min-width:200px;">Ward
+            <div style="display:flex; gap:6px; align-items:center;">
+              <select id="wwWardSelect" style="min-width:140px;flex:1"><option value="">(all wards)</option></select>
+              <input id="wwWardInput" placeholder="or type ward…" style="flex:1" />
+            </div>
+          </label>
+          <label style="flex:2;min-width:220px;">Bed/Room
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input id="wwBed" placeholder="e.g., สว14/19 ฉัตรพล" list="wwBedList" style="flex:1;" />
+              <select id="wwBedSelect" style="min-width:180px;"><option value="">(pick bed)</option></select>
+            </div>
+            <datalist id="wwBedList"></datalist>
+          </label>
+          <label style="flex:3;min-width:240px;">Task (multi-line)
+            <textarea id="wwTask" rows="3" placeholder="One task per line. Ctrl/Cmd+Enter = Add; Enter = new line."></textarea>
+          </label>
+          <button id="wwAdd" class="save-btn">Add</button>
+        </div>
+      </section>
+      <section class="card" style="max-width:720px;">
+        <h3 style="margin-top:0;">Tasks</h3>
+        <div id="wwList" style="display:grid;gap:12px"></div>
+      </section>
+      <section id="wwPreviewSection" class="card" style="max-width:720px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <h3 style="margin:0;">Preview</h3>
+          <button id="wwCopy" class="ghost">Copy</button>
+          <button id="wwPreviewToggle" class="ghost" style="margin-left:auto;">Hide</button>
+        </div>
+        <textarea id="wwPreviewTa" rows="10" style="width:100%;margin-top:8px;white-space:pre; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></textarea>
+      </section>
+    </div>
     <div id="bedContainer">
       <h2 id="wardTitle">Select a ward</h2>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -2042,6 +2101,200 @@ const bedContainer=document.getElementById('bedContainer');
 const profilePage=document.getElementById('profilePage');
 const backToBedsBtn=document.getElementById('backToBedsBtn');
 const saveBtn=document.getElementById('saveProfileBtn');
+// Ward Work elements
+const wardWorkBtn=document.getElementById('wardWorkBtn');
+const wardWorkPage=document.getElementById('wardWorkPage');
+const backToBedsFromWW=document.getElementById('backToBedsFromWW');
+const wwDate=document.getElementById('wwDate');
+const wwBed=document.getElementById('wwBed');
+const wwTask=document.getElementById('wwTask');
+const wwAdd=document.getElementById('wwAdd');
+const wwList=document.getElementById('wwList');
+const wwPreviewTa=document.getElementById('wwPreviewTa');
+const wwBedSelect=document.getElementById('wwBedSelect');
+const wwWardSelect=document.getElementById('wwWardSelect');
+const wwWardInput=document.getElementById('wwWardInput');
+const wwCopy=document.getElementById('wwCopy');
+const wwBedList=document.getElementById('wwBedList');
+
+// Ward Work storage
+const WW_KEY='wardWorkTasks-v1';
+function loadWW(){ try{ return JSON.parse(localStorage.getItem(WW_KEY)||'[]'); }catch{ return []; } }
+function saveWW(arr){ try{ localStorage.setItem(WW_KEY, JSON.stringify(arr||[])); }catch{} }
+let wwTasks=loadWW(); // shape: {id, date, bed, task}
+
+function openWardWork(){
+  bedContainer.style.display='none';
+  profilePage.style.display='none';
+  wardWorkPage.style.display='flex';
+  // default date = today if empty
+  if(!wwDate.value){ const d=new Date(); const iso=d.toISOString().slice(0,10); wwDate.value=iso; }
+  refreshWWSuggestions();
+  renderWW();
+}
+function backFromWW(){ wardWorkPage.style.display='none'; bedContainer.style.display='block'; }
+wardWorkBtn?.addEventListener('click', openWardWork);
+backToBedsFromWW?.addEventListener('click', backFromWW);
+
+function refreshWWSuggestions(){
+  if(!wwBedList) return;
+  wwBedList.innerHTML='';
+  if(wwBedSelect){ wwBedSelect.innerHTML='<option value="">(pick bed)</option>'; }
+  // rebuild ward select based on current data
+  if(wwWardSelect){
+    const prev = wwWardSelect.value;
+    wwWardSelect.innerHTML = '<option value="">(all wards)</option>';
+    (data.wards||[]).forEach(w=>{
+      const opt=document.createElement('option');
+      const label=(w.name||w.id||'Ward');
+      opt.value=label; // use name label for filtering
+      opt.textContent=label;
+      wwWardSelect.appendChild(opt);
+    });
+    if(prev && Array.from(wwWardSelect.options).some(o=>o.value===prev)) wwWardSelect.value=prev;
+  }
+  // Build canonical labels: choose ward/name with '/' separator only (avoid duplicate space form)
+  const labels=[];
+  (data.wards||[]).forEach(w=>{ (w.beds||[]).forEach(b=>{
+    if((b.status||'active').toLowerCase()==='discharge') return; // active only
+    const ward=(w.name||'').trim();
+    const bed=(b.name||'').trim();
+    if(!ward && !bed) return;
+    let label='';
+    if(ward && bed){
+      // If ward already contains '/', don't double it
+      label = ward.includes('/') ? `${ward} ${bed}`.trim() : `${ward}/${bed}`.trim();
+    } else label = (ward||bed);
+    labels.push(label);
+  }); });
+  const listArr=Array.from(new Set(labels));
+  listArr.slice(0,800).forEach(n=>{ const opt=document.createElement('option'); opt.value=n; wwBedList.appendChild(opt); });
+  if(wwBedSelect){
+    const wardVal = (wwWardInput?.value||'').trim() || wwWardSelect?.value || '';
+    const regex = wardVal? new RegExp('^'+ wardVal.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[\\ /]','i') : null;
+    listArr.forEach(n=>{
+      if(regex && !regex.test(n)) return;
+      const o=document.createElement('option'); o.value=n; o.textContent=n; wwBedSelect.appendChild(o);
+    });
+  }
+}
+
+function formatWWHeader(dateStr){
+  // dateStr is yyyy-mm-dd -> dd/mm/yy (Buddhist year or just yy?) Using dd/mm/yy like sample
+  try{
+    const [y,m,d]=dateStr.split('-').map(x=>parseInt(x,10));
+    const yy=String(y).slice(-2);
+    return `🔆 WW ${d}/${m}/${yy} 🔆`;
+  }catch{ return '🔆 WW 🔆'; }
+}
+function updateWWPreview(){
+  const curDate=wwDate.value||'';
+  const list=wwTasks.filter(t=>t.date===curDate);
+  const groups=new Map();
+  list.forEach(t=>{ if(!groups.has(t.bed)) groups.set(t.bed, []); groups.get(t.bed).push(t.task); });
+  const lines=[formatWWHeader(curDate),''];
+  Array.from(groups.entries()).forEach(([bed,tasks])=>{
+    lines.push(bed);
+    tasks.forEach(tsk=> lines.push('⭕️ '+tsk));
+    lines.push('');
+  });
+  wwPreviewTa.value = lines.join('\n').trim();
+}
+function renderWW(){
+  const curDate=wwDate.value||'';
+  const list=wwTasks.filter(t=>t.date===curDate);
+  wwList.innerHTML='';
+  const byBed=new Map();
+  list.forEach(t=>{ if(!byBed.has(t.bed)) byBed.set(t.bed, []); byBed.get(t.bed).push(t); });
+  byBed.forEach((tasks, bedLabel)=>{
+    const group=document.createElement('div');
+    group.style.border='1px solid #ddd'; group.style.borderRadius='10px'; group.style.padding='8px 10px'; group.style.background='#fafafa';
+    const header=document.createElement('div'); header.textContent=bedLabel; header.style.fontWeight='700'; header.style.marginBottom='6px';
+    const listWrap=document.createElement('div'); listWrap.style.display='grid'; listWrap.style.gap='6px';
+    tasks.forEach(t=>{
+      const row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='auto 1fr auto'; row.style.gap='8px'; row.style.alignItems='center';
+      const dot=document.createElement('span'); dot.textContent='⭕️'; dot.setAttribute('aria-hidden','true');
+      const inp=document.createElement('input'); inp.type='text'; inp.value=t.task; inp.style.width='100%';
+      inp.addEventListener('input', ()=>{ const rec=wwTasks.find(x=>x.id===t.id); if(rec){ rec.task=inp.value; saveWW(wwTasks); updateWWPreview(); } });
+      const del=document.createElement('button'); del.textContent='×'; del.className='ghost'; del.title='Delete'; del.onclick=()=>{ wwTasks=wwTasks.filter(x=>x.id!==t.id); saveWW(wwTasks); renderWW(); };
+      row.appendChild(dot); row.appendChild(inp); row.appendChild(del);
+      listWrap.appendChild(row);
+    });
+    group.appendChild(header); group.appendChild(listWrap); wwList.appendChild(group);
+  });
+  updateWWPreview();
+}
+
+wwAdd?.addEventListener('click', ()=>{
+  const date=wwDate.value||''; const bedRaw=(wwBed.value||'').trim(); const multi=(wwTask.value||'');
+  if(!date||!bedRaw||!multi.trim()) return;
+  const wardLabel=((wwWardInput?.value||'').trim()) || (wwWardSelect?.value||'').trim();
+  let bedLabel=bedRaw;
+  if(wardLabel && !bedLabel.startsWith(wardLabel+'/') && !bedLabel.startsWith(wardLabel+' ')){
+    bedLabel = wardLabel.includes('/') ? `${wardLabel} ${bedLabel}`.trim() : `${wardLabel}/${bedLabel}`.trim();
+  }
+  const lines=multi.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(lines.length===0) return;
+  lines.forEach(line=>{
+    wwTasks.push({ id:'ww'+Date.now()+Math.floor(Math.random()*1000), date, bed: bedLabel, task: line, ward: wardLabel||null });
+  });
+  saveWW(wwTasks);
+  wwTask.value='';
+  renderWW();
+});
+wwCopy?.addEventListener('click', async ()=>{
+  const text=wwPreviewTa.value||'';
+  let ok=false;
+  try{ await navigator.clipboard.writeText(text); ok=true; }catch{}
+  if(!ok){
+    try{
+      const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); ok=true;
+    }catch{}
+  }
+  wwCopy.textContent= ok? 'Copied' : 'Copy failed';
+  setTimeout(()=> wwCopy.textContent='Copy', 1200);
+});
+
+// Pick bed via select
+wwBedSelect?.addEventListener('change', ()=>{
+  if(!wwBedSelect.value) return;
+  wwBed.value = wwBedSelect.value;
+  wwTask.focus();
+});
+
+// When ward changes, refresh bed options and focus bed field
+wwWardSelect?.addEventListener('change', ()=>{
+  refreshWWSuggestions();
+  wwBed.focus();
+});
+wwWardInput?.addEventListener('input', ()=>{
+  refreshWWSuggestions();
+});
+
+// Preview show/hide toggle (persisted)
+const wwPreviewSection=document.getElementById('wwPreviewSection');
+const wwPreviewToggle=document.getElementById('wwPreviewToggle');
+const WW_PREVIEW_OPEN_KEY='ww-preview-open-v1';
+function applyWWPreviewOpen(open){
+  if(!wwPreviewSection||!wwPreviewToggle) return;
+  wwPreviewSection.querySelector('textarea')?.classList.toggle('collapsed', !open);
+  wwPreviewSection.style.display = open? '' : 'none';
+  wwPreviewToggle.textContent = open? 'Hide' : 'Show';
+}
+wwPreviewToggle?.addEventListener('click', ()=>{
+  const isOpen = wwPreviewSection.style.display !== 'none';
+  const next=!isOpen; applyWWPreviewOpen(next); try{ localStorage.setItem(WW_PREVIEW_OPEN_KEY, JSON.stringify(next)); }catch{}
+});
+try{ const saved=JSON.parse(localStorage.getItem(WW_PREVIEW_OPEN_KEY)||'true'); applyWWPreviewOpen(!!saved); }catch{ applyWWPreviewOpen(true); }
+
+// Enter key flows
+wwBed?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); wwTask?.focus(); } });
+// In textarea: plain Enter = newline; Cmd/Ctrl+Enter = Add all lines as tasks
+wwTask?.addEventListener('keydown', (e)=>{ 
+  if(e.key==='Enter' && (e.metaKey || e.ctrlKey)){
+    e.preventDefault(); wwAdd?.click();
+  }
+});
 
 function openProfilePage(bed, opts={}){
   selectedBedId=bed.id;
