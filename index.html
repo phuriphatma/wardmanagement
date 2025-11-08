@@ -264,6 +264,33 @@ body.collapsed #expandSidebarBtn{display:none}
     #wardWorkPage .row button{ width:100% !important; }
     #wardWorkPage .row .save-btn{ width:100% !important; }
   }
+  /* WardWork mobile preview bottom sheet */
+  #wardWorkPage .mobile-preview-sheet {
+    position: fixed; left: 250px; right: 0; bottom: 0; height: 45vh;
+    background: #0d1427; color:#e8ecf1; border-top: 1px solid #22304a;
+    box-shadow: 0 -12px 30px rgba(0,0,0,0.35);
+    transform: translateY(100%);
+    transition: transform 0.25s ease; z-index: 1002;
+    display: flex; flex-direction: column; will-change: height, transform;
+  }
+  body.collapsed #wardWorkPage .mobile-preview-sheet { left: 0; }
+  #wardWorkPage .mobile-preview-sheet.open { transform: translateY(0); }
+  #wardWorkPage .mobile-preview-sheet .sheet-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid #22304a; }
+  #wardWorkPage .mobile-preview-sheet .sheet-header .grabber{ width: 42px; height: 6px; background: #2a3a5a; border-radius: 3px; margin-right: 8px; cursor: ns-resize; }
+  #wardWorkPage .mobile-preview-sheet .title { font-weight: 600; color: #a9b2c0; }
+  #wardWorkPage .mobile-preview-sheet .sheet-actions { display: flex; gap: 8px; }
+  #wardWorkPage .mobile-preview-sheet .sheet-body { padding: 10px 12px; overflow: auto; display:flex; min-height: 0; }
+  #wardWorkPage .fab-preview { position: fixed; right: 16px; bottom: 16px; z-index: 1003; padding: 10px 14px; background: #5b9cff; border: 0; color: #03122b; font-weight: 700; border-radius: 22px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+  @media (max-width: 979px){ #wardWorkPage .mobile-preview-sheet { left: 0 !important; } }
+  /* WardWork: hide native datalist dropdown arrow on text inputs (keep our custom ▾ buttons) */
+  #wardWorkPage input[list]{ -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: none !important; }
+  #wardWorkPage input[list]::-webkit-calendar-picker-indicator{ display:none !important; opacity:0 !important; }
+  #wardWorkPage input.wwWard::-webkit-calendar-picker-indicator,
+  #wardWorkPage input.wwBed::-webkit-calendar-picker-indicator{ display:none !important; opacity:0 !important; }
+  #wardWorkPage .ww-block-handle{ cursor:grab; font-size:18px; padding:4px 6px; color:#666; user-select:none; }
+  #wardWorkPage .ww-block-handle:active{ cursor:grabbing; }
+  #wardWorkPage .ww-task-handle{ cursor:grab; user-select:none; }
+  #wardWorkPage .ww-task-handle:active{ cursor:grabbing; }
 </style>
 <!-- SheetJS for parsing XLSX tab names -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -319,28 +346,23 @@ body.collapsed #expandSidebarBtn{display:none}
           <label style="flex:1;min-width:160px;">Date
             <input type="date" id="wwDate" />
           </label>
-          <label style="flex:1.4;min-width:200px;">Ward
-            <div style="display:flex; gap:6px; align-items:center;">
-              <select id="wwWardSelect" style="min-width:140px;flex:1"><option value="">(all wards)</option></select>
-              <input id="wwWardInput" placeholder="or type ward…" style="flex:1" />
-            </div>
+          <label style="flex:1;min-width:160px;">Title
+            <input type="text" id="wwTitle" placeholder="e.g., WW or AM round" />
           </label>
-          <label style="flex:2;min-width:220px;">Bed/Room
-            <div style="display:flex; gap:6px; align-items:center;">
-              <input id="wwBed" placeholder="e.g., สว14/19 ฉัตรพล" list="wwBedList" style="flex:1;" />
-              <select id="wwBedSelect" style="min-width:180px;"><option value="">(pick bed)</option></select>
-            </div>
-            <datalist id="wwBedList"></datalist>
-          </label>
-          <label style="flex:3;min-width:240px;">Task (multi-line)
-            <textarea id="wwTask" rows="3" placeholder="One task per line. Ctrl/Cmd+Enter = Add; Enter = new line."></textarea>
-          </label>
-          <button id="wwAdd" class="save-btn">Add</button>
         </div>
+        <datalist id="wwWardListGlobal"></datalist>
       </section>
       <section class="card" style="max-width:720px;">
         <h3 style="margin-top:0;">Tasks</h3>
+        <div id="wwSnippetBar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
+          <button id="wwSnipToggle" class="ghost" type="button">Snippets</button>
+        </div>
+        <!-- inline panel removed in favor of modal; keeping node hidden for future use -->
+        <div id="wwSnipPanel" style="display:none;"></div>
         <div id="wwList" style="display:grid;gap:12px"></div>
+        <div class="row" style="gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:12px; margin-bottom:32px;">
+          <button id="wwAddBlock" class="save-btn">+ Block</button>
+        </div>
       </section>
       <section id="wwPreviewSection" class="card" style="max-width:720px;">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -350,6 +372,36 @@ body.collapsed #expandSidebarBtn{display:none}
         </div>
         <textarea id="wwPreviewTa" rows="10" style="width:100%;margin-top:8px;white-space:pre; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></textarea>
       </section>
+      <!-- WardWork bottom sheet preview for mobile -->
+      <div id="wwMobilePreviewSheet" class="mobile-preview-sheet">
+        <div class="sheet-header">
+          <div class="grabber" id="wwSheetGrabber"></div>
+          <div class="title">Preview</div>
+          <div class="sheet-actions">
+            <button id="wwCopyMobile">Copy</button>
+            <button id="wwCloseSheet" class="ghost">Close</button>
+          </div>
+        </div>
+        <div id="wwMobilePreviewBody" class="sheet-body" style="width:100%">
+          <pre id="wwPreviewMobile" class="preview" contenteditable="true" spellcheck="false" style="flex:1;min-height:0; white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></pre>
+        </div>
+      </div>
+      <button id="wwTogglePreview" class="fab-preview">Preview</button>
+      <!-- WardWork Snippets Modal -->
+      <div id="wwSnipModal" class="modal">
+        <div class="modal-content" style="max-width:520px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">
+            <h2 style="margin:0;">Snippets</h2>
+            <button id="wwSnipClose" class="ghost" title="Close">×</button>
+          </div>
+          <div id="wwSnipList" style="display:flex; flex-direction:column; gap:8px;"></div>
+          <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+            <input id="wwSnipNew" type="text" placeholder="Add frequent task…" style="flex:1; padding:8px;" />
+            <button id="wwSnipAdd" class="save-btn">Add</button>
+          </div>
+          <div style="margin-top:8px; font-size:12px; color:#666;">Tip: Tap ⧉+ on a block to insert a snippet quickly.</div>
+        </div>
+      </div>
     </div>
     <div id="bedContainer">
       <h2 id="wardTitle">Select a ward</h2>
@@ -2106,22 +2158,72 @@ const wardWorkBtn=document.getElementById('wardWorkBtn');
 const wardWorkPage=document.getElementById('wardWorkPage');
 const backToBedsFromWW=document.getElementById('backToBedsFromWW');
 const wwDate=document.getElementById('wwDate');
-const wwBed=document.getElementById('wwBed');
-const wwTask=document.getElementById('wwTask');
-const wwAdd=document.getElementById('wwAdd');
+const wwTitle=document.getElementById('wwTitle');
+const wwAddBlock=document.getElementById('wwAddBlock');
 const wwList=document.getElementById('wwList');
 const wwPreviewTa=document.getElementById('wwPreviewTa');
-const wwBedSelect=document.getElementById('wwBedSelect');
-const wwWardSelect=document.getElementById('wwWardSelect');
-const wwWardInput=document.getElementById('wwWardInput');
 const wwCopy=document.getElementById('wwCopy');
-const wwBedList=document.getElementById('wwBedList');
+// (Dynamic per-block bed lists will be generated). Global ward suggestions list:
+const wwWardListGlobal=document.getElementById('wwWardListGlobal');
+// Snippets UI
+const wwSnippetBar=document.getElementById('wwSnippetBar');
+const wwSnipToggle=document.getElementById('wwSnipToggle');
+const wwSnipPanel=document.getElementById('wwSnipPanel'); // legacy hidden container
+const wwSnipModal=document.getElementById('wwSnipModal');
+const wwSnipListEl=document.getElementById('wwSnipList');
+const wwSnipCloseBtn=document.getElementById('wwSnipClose');
+const wwSnipAddBtn=document.getElementById('wwSnipAdd');
+const wwSnipNewInput=document.getElementById('wwSnipNew');
 
 // Ward Work storage
 const WW_KEY='wardWorkTasks-v1';
 function loadWW(){ try{ return JSON.parse(localStorage.getItem(WW_KEY)||'[]'); }catch{ return []; } }
 function saveWW(arr){ try{ localStorage.setItem(WW_KEY, JSON.stringify(arr||[])); }catch{} }
-let wwTasks=loadWW(); // shape: {id, date, bed, task}
+let wwTasks=loadWW(); // shape: {id, date, bed, task, blank?}
+// WardWork snippets storage
+const WW_SNIPPETS_KEY='ww-snippets-v1';
+function loadWWSnippets(){ try{ return JSON.parse(localStorage.getItem(WW_SNIPPETS_KEY)||'[]'); }catch{ return []; } }
+function saveWWSnippets(arr){ try{ localStorage.setItem(WW_SNIPPETS_KEY, JSON.stringify(arr||[])); }catch{} }
+let wwSnippets=loadWWSnippets(); // array of { id, text }
+
+// Block ordering persistence per date
+const WW_BLOCK_ORDER_PREFIX='ww-block-order-v1:';
+function loadBlockOrder(dateStr){
+  try{ return JSON.parse(localStorage.getItem(WW_BLOCK_ORDER_PREFIX+dateStr)||'[]'); }catch{ return []; }
+}
+function saveBlockOrder(dateStr, arr){
+  try{ localStorage.setItem(WW_BLOCK_ORDER_PREFIX+dateStr, JSON.stringify(arr||[])); }catch{}
+}
+function getOrderedLabels(dateStr, labels){
+  const existing=loadBlockOrder(dateStr);
+  // keep only labels that still exist
+  let order=existing.filter(x=> labels.includes(x));
+  // append any new labels not in order yet
+  labels.forEach(l=>{ if(!order.includes(l)) order.push(l); });
+  return order;
+}
+function moveBlock(dateStr, fromLabel, toLabel){
+  if(fromLabel===toLabel) return;
+  const order=getOrderedLabels(dateStr, []);
+  const fi=order.indexOf(fromLabel); const ti=order.indexOf(toLabel);
+  if(fi<0 || ti<0) return;
+  const [m]=order.splice(fi,1);
+  order.splice(ti,0,m);
+  saveBlockOrder(dateStr, order);
+}
+function appendBlockIfMissing(dateStr, label){
+  const order=loadBlockOrder(dateStr);
+  if(!order.includes(label)){ order.push(label); saveBlockOrder(dateStr, order); }
+}
+function replaceBlockLabel(dateStr, oldLabel, newLabel){
+  const order=loadBlockOrder(dateStr);
+  const idx=order.indexOf(oldLabel);
+  if(idx>=0){ order[idx]=newLabel; saveBlockOrder(dateStr, order); }
+}
+function removeBlockLabel(dateStr, label){
+  const order=loadBlockOrder(dateStr).filter(x=> x!==label);
+  saveBlockOrder(dateStr, order);
+}
 
 function openWardWork(){
   bedContainer.style.display='none';
@@ -2129,7 +2231,10 @@ function openWardWork(){
   wardWorkPage.style.display='flex';
   // default date = today if empty
   if(!wwDate.value){ const d=new Date(); const iso=d.toISOString().slice(0,10); wwDate.value=iso; }
+  // load saved title if any
+  try{ const saved=localStorage.getItem('ww-title'); if(saved && wwTitle){ wwTitle.value=saved; } }catch{}
   refreshWWSuggestions();
+  buildWWSnippetsUI(); // ensure modal list is ready
   renderWW();
 }
 function backFromWW(){ wardWorkPage.style.display='none'; bedContainer.style.display='block'; }
@@ -2137,46 +2242,36 @@ wardWorkBtn?.addEventListener('click', openWardWork);
 backToBedsFromWW?.addEventListener('click', backFromWW);
 
 function refreshWWSuggestions(){
-  if(!wwBedList) return;
-  wwBedList.innerHTML='';
-  if(wwBedSelect){ wwBedSelect.innerHTML='<option value="">(pick bed)</option>'; }
-  // rebuild ward select based on current data
-  if(wwWardSelect){
-    const prev = wwWardSelect.value;
-    wwWardSelect.innerHTML = '<option value="">(all wards)</option>';
-    (data.wards||[]).forEach(w=>{
-      const opt=document.createElement('option');
-      const label=(w.name||w.id||'Ward');
-      opt.value=label; // use name label for filtering
-      opt.textContent=label;
-      wwWardSelect.appendChild(opt);
-    });
-    if(prev && Array.from(wwWardSelect.options).some(o=>o.value===prev)) wwWardSelect.value=prev;
+  // Populate global ward names
+  if(wwWardListGlobal){
+    wwWardListGlobal.innerHTML='';
+    (data.wards||[]).forEach(w=>{ const opt=document.createElement('option'); opt.value=(w.name||'').trim(); wwWardListGlobal.appendChild(opt); });
   }
-  // Build canonical labels: choose ward/name with '/' separator only (avoid duplicate space form)
-  const labels=[];
-  (data.wards||[]).forEach(w=>{ (w.beds||[]).forEach(b=>{
-    if((b.status||'active').toLowerCase()==='discharge') return; // active only
-    const ward=(w.name||'').trim();
-    const bed=(b.name||'').trim();
-    if(!ward && !bed) return;
-    let label='';
-    if(ward && bed){
-      // If ward already contains '/', don't double it
-      label = ward.includes('/') ? `${ward} ${bed}`.trim() : `${ward}/${bed}`.trim();
-    } else label = (ward||bed);
-    labels.push(label);
-  }); });
-  const listArr=Array.from(new Set(labels));
-  listArr.slice(0,800).forEach(n=>{ const opt=document.createElement('option'); opt.value=n; wwBedList.appendChild(opt); });
-  if(wwBedSelect){
-    const wardVal = (wwWardInput?.value||'').trim() || wwWardSelect?.value || '';
-    const regex = wardVal? new RegExp('^'+ wardVal.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[\\ /]','i') : null;
-    listArr.forEach(n=>{
-      if(regex && !regex.test(n)) return;
-      const o=document.createElement('option'); o.value=n; o.textContent=n; wwBedSelect.appendChild(o);
-    });
-  }
+  // For each existing block, rebuild its bed datalist based on ward value
+  document.querySelectorAll('.ww-block').forEach(block=>{
+    const wardInp=block.querySelector('.wwWard');
+    const bedList=block.querySelector('datalist[data-bedlist]');
+    if(!bedList) return;
+    bedList.innerHTML='';
+    const wardName=(wardInp?.value||'').trim();
+    if(!wardName){
+      // Show all beds across all wards
+      (data.wards||[]).forEach(w=>{
+        (w.beds||[]).forEach(b=>{
+          if((b.status||'active').toLowerCase()==='discharge') return;
+          const opt=document.createElement('option'); opt.value=(b.name||'').trim(); bedList.appendChild(opt);
+        });
+      });
+    }else{
+      const w=(data.wards||[]).find(x=> (x.name||'').trim()===wardName);
+      if(w){
+        (w.beds||[]).forEach(b=>{
+          if((b.status||'active').toLowerCase()==='discharge') return;
+          const opt=document.createElement('option'); opt.value=(b.name||'').trim(); bedList.appendChild(opt);
+        });
+      }
+    }
+  });
 }
 
 function formatWWHeader(dateStr){
@@ -2184,12 +2279,14 @@ function formatWWHeader(dateStr){
   try{
     const [y,m,d]=dateStr.split('-').map(x=>parseInt(x,10));
     const yy=String(y).slice(-2);
-    return `🔆 WW ${d}/${m}/${yy} 🔆`;
+    const base=`${d}/${m}/${yy}`;
+    const title=(wwTitle?.value||'WW').trim()||'WW';
+    return `🔆 ${title} ${base} 🔆`;
   }catch{ return '🔆 WW 🔆'; }
 }
 function updateWWPreview(){
   const curDate=wwDate.value||'';
-  const list=wwTasks.filter(t=>t.date===curDate);
+  const list=wwTasks.filter(t=>t.date===curDate && (t.task||'').trim()!=='');
   const groups=new Map();
   list.forEach(t=>{ if(!groups.has(t.bed)) groups.set(t.bed, []); groups.get(t.bed).push(t.task); });
   const lines=[formatWWHeader(curDate),''];
@@ -2199,49 +2296,514 @@ function updateWWPreview(){
     lines.push('');
   });
   wwPreviewTa.value = lines.join('\n').trim();
+  const mob=document.getElementById('wwPreviewMobile'); if(mob) mob.textContent = wwPreviewTa.value;
+}
+// Build / refresh snippet chips panel
+function buildWWSnippetsUI(){
+  if(!wwSnipListEl) return;
+  wwSnipListEl.innerHTML='';
+  wwSnippets.forEach(sn=>{
+    const row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='1fr auto'; row.style.gap='8px'; row.style.alignItems='center';
+    const inp=document.createElement('input'); inp.type='text'; inp.value=sn.text; inp.style.padding='8px'; inp.addEventListener('input', ()=>{ sn.text=inp.value; saveWWSnippets(wwSnippets); });
+    const del=document.createElement('button'); del.textContent='×'; del.className='ghost'; del.title='Delete'; del.onclick=()=>{ wwSnippets=wwSnippets.filter(x=>x.id!==sn.id); saveWWSnippets(wwSnippets); buildWWSnippetsUI(); };
+    row.appendChild(inp); row.appendChild(del); wwSnipListEl.appendChild(row);
+  });
+}
+function openWWSnippetModal(){ if(!wwSnipModal) return; buildWWSnippetsUI(); wwSnipModal.style.display='flex'; }
+function closeWWSnippetModal(){ if(!wwSnipModal) return; wwSnipModal.style.display='none'; }
+wwSnipToggle?.addEventListener('click', openWWSnippetModal);
+wwSnipCloseBtn?.addEventListener('click', closeWWSnippetModal);
+wwSnipModal?.addEventListener('click', (e)=>{ if(e.target===wwSnipModal) closeWWSnippetModal(); });
+wwSnipAddBtn?.addEventListener('click', ()=>{ const v=(wwSnipNewInput?.value||'').trim(); if(!v) return; wwSnippets.push({ id:'sn'+Date.now()+Math.floor(Math.random()*1000), text:v }); saveWWSnippets(wwSnippets); wwSnipNewInput.value=''; buildWWSnippetsUI(); });
+wwSnipNewInput?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); wwSnipAddBtn?.click(); } });
+// Insert snippet into current block (focus-first non-empty or create new block if none)
+function quickInsertSnippet(text){
+  const curDate=wwDate.value||''; if(!curDate) return;
+  // Determine target block: last focused textarea or first block; fallback create block
+  let targetBlock=document.querySelector('.ww-block textarea:focus')?.closest('.ww-block');
+  if(!targetBlock){ targetBlock=document.querySelector('.ww-block'); }
+  if(!targetBlock){
+    // create new block
+    const tempLabel = '(new) ' + (Date.now()%1e7) + '-' + Math.floor(Math.random()*1000);
+    wwTasks.push({ id:'ww'+Date.now()+Math.floor(Math.random()*1000), date:curDate, bed: tempLabel, task:'' });
+    saveWW(wwTasks); renderWW(); appendBlockIfMissing(curDate, tempLabel); targetBlock=[...document.querySelectorAll('.ww-block')].find(b=> b.dataset.label===tempLabel);
+  }
+  if(!targetBlock) return;
+  const bedLabel=targetBlock.dataset.label;
+  const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
+  wwTasks.push({ id:newId, date:curDate, bed: bedLabel, task: text });
+  saveWW(wwTasks); renderWW();
+  // focus new task
+  setTimeout(()=>{ const ta=targetBlock.querySelector(`textarea[data-id="${newId}"]`); ta?.focus(); },60);
 }
 function renderWW(){
   const curDate=wwDate.value||'';
   const list=wwTasks.filter(t=>t.date===curDate);
   wwList.innerHTML='';
   const byBed=new Map();
-  list.forEach(t=>{ if(!byBed.has(t.bed)) byBed.set(t.bed, []); byBed.get(t.bed).push(t); });
-  byBed.forEach((tasks, bedLabel)=>{
+  list.forEach(t=>{ const key=(t.bed||''); if(!byBed.has(key)) byBed.set(key, []); byBed.get(key).push(t); });
+  const labelsOrdered = getOrderedLabels(curDate, Array.from(byBed.keys()));
+  labelsOrdered.forEach((bedLabel)=>{
+    const tasks = byBed.get(bedLabel) || [];
     const group=document.createElement('div');
+    group.className='ww-block';
     group.style.border='1px solid #ddd'; group.style.borderRadius='10px'; group.style.padding='8px 10px'; group.style.background='#fafafa';
-    const header=document.createElement('div'); header.textContent=bedLabel; header.style.fontWeight='700'; header.style.marginBottom='6px';
-    const listWrap=document.createElement('div'); listWrap.style.display='grid'; listWrap.style.gap='6px';
+    group.setAttribute('draggable','true');
+    group.dataset.label=bedLabel;
+  const header=document.createElement('div'); header.style.display='flex'; header.style.flexDirection='column'; header.style.gap='8px'; header.style.marginBottom='6px';
+  // Actions row (add/delete) above fields
+  const actions=document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px'; actions.style.justifyContent='space-between'; actions.style.alignItems='center';
+  const blockHandle=document.createElement('span'); blockHandle.textContent='≡'; blockHandle.className='ww-block-handle';
+  // Editable ward/bed fields split into two inputs on the same line with tight separator
+  const wbWrap=document.createElement('div'); wbWrap.style.display='flex'; wbWrap.style.alignItems='center'; wbWrap.style.gap='6px';
+  const wardInp=document.createElement('input'); wardInp.type='text'; wardInp.placeholder='ward'; wardInp.className='wwWard'; wardInp.setAttribute('list','wwWardListGlobal');
+  wardInp.style.fontSize='16px'; wardInp.style.padding='8px 10px'; wardInp.style.height='36px'; wardInp.style.lineHeight='20px';
+  const sep=document.createElement('span'); sep.textContent='/'; sep.style.textAlign='center'; sep.style.color='#666'; sep.style.margin='0 4px';
+  const bedInp=document.createElement('input'); bedInp.type='text'; bedInp.placeholder='bed/room'; bedInp.style.width='100%'; bedInp.className='wwBed';
+  bedInp.style.fontSize='16px'; bedInp.style.padding='8px 10px'; bedInp.style.height='36px'; bedInp.style.lineHeight='20px';
+  const bedList=document.createElement('datalist'); bedList.setAttribute('data-bedlist','1'); const bedListId='wwBedList-'+Math.floor(Math.random()*1e9); bedList.id=bedListId; bedInp.setAttribute('list', bedListId);
+  // picker buttons
+  const wardPickBtn=document.createElement('button'); wardPickBtn.textContent='▾'; wardPickBtn.className='ghost'; wardPickBtn.title='Pick ward'; wardPickBtn.style.minWidth='36px'; wardPickBtn.style.height='36px';
+  const bedPickBtn=document.createElement('button'); bedPickBtn.textContent='▾'; bedPickBtn.className='ghost'; bedPickBtn.title='Pick bed'; bedPickBtn.style.minWidth='36px'; bedPickBtn.style.height='36px';
+    // prefill if label contains '/'
+    if(!bedLabel || bedLabel.startsWith('(new) ') ){
+      wardInp.value=''; bedInp.value='';
+    } else if((bedLabel||'').includes('/')){ const [w,b]=bedLabel.split(/\s*\/\s*/,2); wardInp.value=w||''; bedInp.value=b||''; }
+    else { wardInp.value=bedLabel||''; bedInp.value=''; }
+  const addBtn=document.createElement('button'); addBtn.textContent='add task'; addBtn.className='ghost'; addBtn.onclick=()=>{ addEmptyTask(getCombined(), true); };
+  // Quick snippet insertion button inside block for convenience
+  const snQuick=document.createElement('button'); snQuick.textContent='⧉+'; snQuick.className='ghost'; snQuick.title='Insert snippet';
+  snQuick.onclick=()=>{
+    if(!wwSnippets.length){ alert('No snippets yet. Use Snippets panel to add some.'); return; }
+    // Show simple chooser (reuse showMenu) with snippets
+    showInlineSnippetMenu(snQuick, bedLabel);
+  };
+    const delBtn=document.createElement('button'); delBtn.textContent='delete block'; delBtn.className='delete'; delBtn.onclick=()=>{
+      const cur=getCombined();
+      // Remove tasks for either original label or current combined label
+      wwTasks = wwTasks.filter(x=> !(x.date===curDate && (x.bed===bedLabel || x.bed===cur)) );
+      saveWW(wwTasks); renderWW();
+      removeBlockLabel(curDate, bedLabel);
+    };
+  actions.appendChild(blockHandle); actions.appendChild(addBtn); actions.appendChild(snQuick); actions.appendChild(delBtn);
+    header.appendChild(actions);
+  wardInp.style.flex='0 0 auto'; bedInp.style.flex='1 1 0';
+  wardInp.style.minWidth='90px';
+  wbWrap.appendChild(wardInp); wbWrap.appendChild(wardPickBtn); wbWrap.appendChild(sep); wbWrap.appendChild(bedInp); wbWrap.appendChild(bedPickBtn);
+    header.appendChild(wbWrap);
+    header.appendChild(bedList);
+  const listWrap=document.createElement('div'); listWrap.style.display='grid'; listWrap.style.gap='6px'; listWrap.setAttribute('data-listwrap','1');
+    function getCombined(){ const w=wardInp.value.trim(); const b=bedInp.value.trim(); if(w&&b) return `${w}/${b}`; return (w||b)||''; }
+  function renameGroup(oldLabel,newLabel){ if(newLabel===oldLabel) return; wwTasks.forEach(t=>{ if(t.date===curDate && t.bed===oldLabel){ t.bed=newLabel; } }); saveWW(wwTasks); replaceBlockLabel(curDate, oldLabel, newLabel); renderWW(); }
+    wardInp.addEventListener('change', ()=> renameGroup(bedLabel, getCombined()));
+    bedInp.addEventListener('change', ()=> renameGroup(bedLabel, getCombined()));
+    // Build initial bed list and refresh suggestions when ward changes
+    const rebuildBedList=()=>{
+      bedList.innerHTML='';
+      const wardName=wardInp.value.trim();
+      const wards=(data.wards||[]);
+      if(wardName){
+        const w=wards.find(x=> (x.name||'').trim()===wardName);
+        if(w){ (w.beds||[]).forEach(b=>{ if((b.status||'active').toLowerCase()==='discharge') return; const val=(b.name||'').trim(); const opt=document.createElement('option'); opt.value=val; bedList.appendChild(opt); }); }
+      }else{
+        wards.forEach(w=>{ (w.beds||[]).forEach(b=>{ if((b.status||'active').toLowerCase()==='discharge') return; const val=(b.name||'').trim(); const opt=document.createElement('option'); opt.value=val; bedList.appendChild(opt); }); });
+      }
+    };
+    rebuildBedList();
+    // Autosize ward input width to fit its text
+    const sizer=document.createElement('span');
+    sizer.style.position='fixed'; sizer.style.left='-9999px'; sizer.style.top='-9999px'; sizer.style.visibility='hidden'; sizer.style.whiteSpace='pre';
+    sizer.style.fontSize=getComputedStyle(wardInp).fontSize; sizer.style.fontFamily=getComputedStyle(wardInp).fontFamily; sizer.style.fontWeight=getComputedStyle(wardInp).fontWeight;
+    document.body.appendChild(sizer);
+    const fitWard=()=>{
+      const txt=(wardInp.value||wardInp.placeholder||'');
+      sizer.textContent=txt;
+      const extra=26; // padding + small buffer
+      const maxPx=Math.max(140, Math.floor(wbWrap.clientWidth*0.6)||240);
+      const w=Math.min(maxPx, sizer.getBoundingClientRect().width + extra);
+      wardInp.style.width = w + 'px';
+    };
+    setTimeout(fitWard, 0);
+    wardInp.addEventListener('input', fitWard);
+    // Refit on picker selections
+    const refitAndRename=()=>{ renameGroup(bedLabel, getCombined()); fitWard(); };
+    
+    wardInp.addEventListener('input', ()=>{ rebuildBedList(); });
+
+    // Simple custom pickers using floating menu
+    function showMenu(anchor, items, onPick){
+      const menu=document.createElement('div');
+      menu.style.position='fixed';
+      menu.style.background='#fff'; menu.style.border='1px solid #ddd'; menu.style.borderRadius='8px'; menu.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)';
+      menu.style.zIndex='10000'; menu.style.maxHeight='40vh'; menu.style.overflow='auto';
+      const positionMenu=()=>{
+        const rect=anchor.getBoundingClientRect();
+        const vw=window.innerWidth; const vh=window.innerHeight;
+        const menuWidth=Math.max(220, rect.width);
+        menu.style.width=menuWidth+'px';
+        let left=rect.left; let top=rect.bottom+4;
+        if(left + menuWidth + 8 > vw) left = Math.max(8, vw - menuWidth - 8);
+        if(!menu.parentElement) document.body.appendChild(menu);
+        const mh=menu.getBoundingClientRect().height || 200;
+        if(top + mh + 8 > vh) top = Math.max(8, vh - mh - 8);
+        menu.style.left=left+'px'; menu.style.top=top+'px';
+      };
+      const close=()=>{ if(menu.parentElement){ document.body.removeChild(menu); } document.removeEventListener('click', onDoc); window.removeEventListener('resize', positionMenu); window.removeEventListener('scroll', positionMenu, true); };
+      const onDoc=(e)=>{ if(!menu.contains(e.target) && e.target!==anchor) close(); };
+      items.forEach(txt=>{
+        const it=document.createElement('div'); it.textContent=txt; it.style.padding='8px 12px'; it.style.cursor='pointer';
+        it.addEventListener('mouseenter', ()=> it.style.background='#f3f5f8');
+        it.addEventListener('mouseleave', ()=> it.style.background='');
+        it.addEventListener('click', ()=>{ onPick(txt); close(); });
+        menu.appendChild(it);
+      });
+      positionMenu();
+      document.addEventListener('click', onDoc);
+      window.addEventListener('resize', positionMenu);
+      window.addEventListener('scroll', positionMenu, true);
+    }
+    // Inline snippet suggestions (singleton menu per render)
+    let wwSuggMenu=null; let wwSuggOnDoc=null; let wwSuggRepos=null;
+    function closeSnippetSuggest(){
+      if(wwSuggMenu && wwSuggMenu.parentElement){ document.body.removeChild(wwSuggMenu); }
+      wwSuggMenu=null;
+      if(wwSuggOnDoc){ document.removeEventListener('click', wwSuggOnDoc); wwSuggOnDoc=null; }
+      if(wwSuggRepos){ window.removeEventListener('resize', wwSuggRepos); window.removeEventListener('scroll', wwSuggRepos, true); wwSuggRepos=null; }
+    }
+    function showSnippetSuggest(anchor, query, onPick){
+      const q=(query||'').trim().toLowerCase();
+      const items=(wwSnippets||[]).map(s=>s.text).filter(t=> t.toLowerCase().includes(q)).slice(0,8);
+      if(!q || items.length===0){ closeSnippetSuggest(); return; }
+      if(wwSuggMenu){ closeSnippetSuggest(); }
+      const menu=document.createElement('div'); wwSuggMenu=menu;
+      menu.style.position='fixed'; menu.style.background='#fff'; menu.style.border='1px solid #ddd'; menu.style.borderRadius='8px'; menu.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)';
+      menu.style.zIndex='10000'; menu.style.maxHeight='40vh'; menu.style.overflow='auto';
+      items.forEach(txt=>{
+        const it=document.createElement('div'); it.textContent=txt; it.style.padding='8px 12px'; it.style.cursor='pointer';
+        it.addEventListener('mouseenter', ()=> it.style.background='#f3f5f8');
+        it.addEventListener('mouseleave', ()=> it.style.background='');
+        it.addEventListener('click', ()=>{ onPick(txt); closeSnippetSuggest(); });
+        menu.appendChild(it);
+      });
+      function position(){
+        const rect=anchor.getBoundingClientRect();
+        const vw=window.innerWidth; const vh=window.innerHeight;
+        const menuWidth=Math.max(220, rect.width);
+        menu.style.width=menuWidth+'px';
+        let left=rect.left; let top=rect.bottom+4;
+        if(left + menuWidth + 8 > vw) left = Math.max(8, vw - menuWidth - 8);
+        if(!menu.parentElement) document.body.appendChild(menu);
+        const mh=menu.getBoundingClientRect().height || 200;
+        if(top + mh + 8 > vh) top = Math.max(8, vh - mh - 8);
+        menu.style.left=left+'px'; menu.style.top=top+'px';
+      }
+      wwSuggOnDoc=(e)=>{ if(!menu.contains(e.target) && e.target!==anchor) closeSnippetSuggest(); };
+      wwSuggRepos=()=> position();
+      position();
+      document.addEventListener('click', wwSuggOnDoc);
+      window.addEventListener('resize', wwSuggRepos);
+      window.addEventListener('scroll', wwSuggRepos, true);
+    }
+    function showInlineSnippetMenu(anchor, targetLabel){
+      if(!wwSnippets.length){ return; }
+      const items=wwSnippets.map(s=> s.text);
+      showMenu(anchor, items, (val)=>{
+        const curDate=wwDate.value||''; if(!curDate) return;
+        const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
+        wwTasks.push({ id:newId, date:curDate, bed: targetLabel, task: val });
+        saveWW(wwTasks); renderWW();
+        setTimeout(()=>{ const block=[...wwList.querySelectorAll('.ww-block')].find(b=> b.dataset.label===targetLabel); const ta=block?.querySelector(`textarea[data-id="${newId}"]`); ta?.focus(); },60);
+      });
+    }
+    wardPickBtn.addEventListener('click', ()=>{
+      const wards=(data.wards||[]).map(w=> (w.name||'').trim()).filter(Boolean);
+      showMenu(wardPickBtn, wards, (val)=>{ wardInp.value=val; refitAndRename(); rebuildBedList(); });
+    });
+    bedPickBtn.addEventListener('click', ()=>{
+      const wn=wardInp.value.trim();
+      let beds=[]; if(wn){ const w=(data.wards||[]).find(x=> (x.name||'').trim()===wn); if(w) beds=(w.beds||[]).filter(b=> (b.status||'active').toLowerCase()!=='discharge').map(b=> (b.name||'').trim()); }
+      if(beds.length===0){ (data.wards||[]).forEach(w=> (w.beds||[]).forEach(b=>{ if((b.status||'active').toLowerCase()==='discharge') return; beds.push((b.name||'').trim()); })); }
+      beds = Array.from(new Set(beds));
+      showMenu(bedPickBtn, beds, (val)=>{ bedInp.value=val; renameGroup(bedLabel, getCombined()); });
+    });
+    const isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
     tasks.forEach(t=>{
-      const row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='auto 1fr auto'; row.style.gap='8px'; row.style.alignItems='center';
-      const dot=document.createElement('span'); dot.textContent='⭕️'; dot.setAttribute('aria-hidden','true');
-      const inp=document.createElement('input'); inp.type='text'; inp.value=t.task; inp.style.width='100%';
-      inp.addEventListener('input', ()=>{ const rec=wwTasks.find(x=>x.id===t.id); if(rec){ rec.task=inp.value; saveWW(wwTasks); updateWWPreview(); } });
-      const del=document.createElement('button'); del.textContent='×'; del.className='ghost'; del.title='Delete'; del.onclick=()=>{ wwTasks=wwTasks.filter(x=>x.id!==t.id); saveWW(wwTasks); renderWW(); };
-      row.appendChild(dot); row.appendChild(inp); row.appendChild(del);
+  const row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='auto 1fr auto auto'; row.style.gap='6px'; row.style.alignItems='center'; row.dataset.taskId=t.id;
+      const dot=document.createElement('span'); dot.textContent='⭕️'; dot.setAttribute('aria-hidden','true'); dot.style.opacity='0.9'; dot.className='ww-task-handle';
+  const inp=document.createElement('textarea'); inp.rows=1; inp.value=t.task; inp.style.width='100%'; inp.style.resize='vertical'; inp.dataset.id=t.id; inp.style.fontSize='15px'; inp.style.lineHeight='1.3'; inp.style.minHeight='34px'; inp.style.padding='6px 8px'; inp.style.minWidth='0';
+  const autoresize=()=>{ inp.style.height='auto'; inp.style.height = (inp.scrollHeight)+'px'; };
+  setTimeout(autoresize, 0);
+  inp.addEventListener('input', ()=>{ const rec=wwTasks.find(x=>x.id===t.id); if(rec){ rec.task=inp.value; saveWW(wwTasks); updateWWPreview(); } autoresize(); showSnippetSuggest(inp, inp.value, (val)=>{ inp.value=val; autoresize(); const rec=wwTasks.find(x=>x.id===t.id); if(rec){ rec.task=inp.value; saveWW(wwTasks); updateWWPreview(); } }); });
+      // hide suggestions on blur (allow time for click)
+      inp.addEventListener('blur', ()=> setTimeout(()=> closeSnippetSuggest(), 120));
+  const dup=document.createElement('button'); dup.textContent='⧉'; dup.className='ghost'; dup.title='Duplicate'; dup.style.minWidth='36px'; dup.style.height='32px';
+      dup.onclick=()=>{
+        const curDate=wwDate.value||''; const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
+        wwTasks.push({ id:newId, date:curDate, bed: bedLabel, task: t.task });
+        saveWW(wwTasks);
+        // place after current
+        const nextRow = row.nextElementSibling; const beforeId = nextRow && nextRow.hasAttribute('data-task-id') ? nextRow.getAttribute('data-task-id') : null;
+        if(beforeId){ reorderTasks(bedLabel, newId, beforeId); }
+        else { renderWW(); }
+      };
+  const del=document.createElement('button'); del.textContent='×'; del.className='ghost'; del.title='Delete'; del.style.minWidth='34px'; del.style.height='32px'; del.onclick=()=>{ wwTasks=wwTasks.filter(x=>x.id!==t.id); saveWW(wwTasks); renderWW(); };
+      row.appendChild(dot); row.appendChild(inp); row.appendChild(dup); row.appendChild(del);
+      if(!isTouch){
+        // Only the dot is draggable; row is drop/move/duplicate target.
+        dot.setAttribute('draggable','true');
+        dot.addEventListener('dragstart', (e)=>{ e.dataTransfer.setData('text/plain', t.id); row.style.opacity='0.55'; });
+        dot.addEventListener('dragend', ()=>{ row.style.opacity=''; });
+        row.addEventListener('dragover', (e)=>{ e.preventDefault(); row.style.background='#eef3ff'; });
+        row.addEventListener('dragleave', ()=>{ row.style.background=''; });
+        row.addEventListener('drop', (e)=>{ e.preventDefault(); row.style.background=''; const fromId=e.dataTransfer.getData('text/plain'); if(!fromId) return; const toId=t.id; const curDate=wwDate.value||''; const fromTask=wwTasks.find(x=> x.id===fromId && x.date===curDate); if(!fromTask) return;
+          const isSameBlock = fromTask.bed===bedLabel;
+          // Detect copy vs move: hold Alt/Option (or Cmd) to duplicate
+          const duplicate = e.altKey || e.metaKey;
+          if(duplicate){
+            // Duplicate into this block before target
+            const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
+            wwTasks.push({ id:newId, date:curDate, bed: bedLabel, task: fromTask.task });
+            saveWW(wwTasks);
+            reorderTasks(bedLabel, newId, toId);
+            return;
+          }
+          if(isSameBlock){
+            if(fromId!==toId) reorderTasks(bedLabel, fromId, toId);
+          } else {
+            moveTaskAcrossBlocks(fromId, bedLabel, toId);
+          }
+        });
+        // Allow dropping at end of block (below all tasks)
+        listWrap.addEventListener('dragover', (e)=>{ e.preventDefault(); });
+        listWrap.addEventListener('drop', (e)=>{ const fromId=e.dataTransfer.getData('text/plain'); if(!fromId) return; const curDate=wwDate.value||''; const fromTask=wwTasks.find(x=> x.id===fromId && x.date===curDate); if(!fromTask) return; const duplicate=e.altKey||e.metaKey; if(duplicate){ const newId='ww'+Date.now()+Math.floor(Math.random()*1000); wwTasks.push({id:newId,date:curDate,bed:bedLabel,task:fromTask.task}); saveWW(wwTasks); renderWW(); return;} if(fromTask.bed!==bedLabel){ moveTaskAcrossBlocks(fromId, bedLabel, null); }});
+      } else {
+        // Mobile long-press drag on dot
+        let pressTimer=null; let touchId=null; let dragState=null; const LONG_MS=350; const CANCEL_MOVE=10;
+        function clearTimer(){ if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; } }
+        dot.addEventListener('touchstart', (e)=>{
+          if(e.touches.length!==1) return; touchId=e.touches[0].identifier; const startY=e.touches[0].clientY; const startX=e.touches[0].clientX;
+          pressTimer=setTimeout(()=>{
+            // start drag
+            const r=row.getBoundingClientRect();
+            const ph=document.createElement('div'); ph.style.height=r.height+'px'; ph.style.border='2px dashed #5b9cff'; ph.style.borderRadius='8px'; ph.style.margin='0';
+            const container=listWrap; const sourceLabel=bedLabel; const taskId=t.id;
+            container.insertBefore(ph, row.nextSibling);
+            row.style.position='fixed'; row.style.left=r.left+'px'; row.style.top=r.top+'px'; row.style.width=r.width+'px'; row.style.zIndex='2000'; row.style.opacity='0.9'; row.style.background='#fff'; row.style.boxShadow='0 8px 24px rgba(0,0,0,0.25)'; row.style.pointerEvents='none';
+            dragState={placeholder:ph,startY,startX,row,origIdx:Array.from(container.children).indexOf(row), container, sourceLabel, taskId};
+            document.body.style.userSelect='none';
+          }, LONG_MS);
+        }, {passive:true});
+        dot.addEventListener('touchmove', (e)=>{
+          const t=[...e.touches].find(t=>t.identifier===touchId); if(!t) return;
+          if(!dragState){
+            // cancel long-press if moved significantly before start
+            const dy=Math.abs(t.clientY - t.screenY); const dx=Math.abs(t.clientX - t.screenX);
+            if(dy>CANCEL_MOVE || dx>CANCEL_MOVE) clearTimer();
+            return;
+          }
+          e.preventDefault();
+          const dy=t.clientY - dragState.startY; dragState.row.style.transform=`translateY(${dy}px)`;
+          // Find target block under finger and its listWrap
+          let targetBlock=document.elementFromPoint(t.clientX, t.clientY);
+          targetBlock = targetBlock ? targetBlock.closest('.ww-block') : null;
+          let targetContainer = targetBlock ? targetBlock.querySelector('[data-listwrap]') : null;
+          if(!targetContainer) targetContainer = dragState.container; // fallback
+          // reposition placeholder within target container
+          const siblings=[...targetContainer.querySelectorAll('div[data-task-id]')].filter(el=> el!==dragState.row && el!==dragState.placeholder);
+          let insertAfter=null; const center=t.clientY;
+          siblings.forEach(s=>{ const sr=s.getBoundingClientRect(); if(center>sr.top + sr.height/2) insertAfter=s; });
+          if(insertAfter){ targetContainer.insertBefore(dragState.placeholder, insertAfter.nextSibling); }
+          else { targetContainer.insertBefore(dragState.placeholder, targetContainer.firstChild); }
+          dragState.container = targetContainer;
+        }, {passive:false});
+        function finishDrag(){
+          if(!dragState) return;
+          const {row,placeholder, container, sourceLabel, taskId}=dragState; row.style.position=''; row.style.left=''; row.style.top=''; row.style.width=''; row.style.zIndex=''; row.style.opacity=''; row.style.background=''; row.style.boxShadow=''; row.style.transform=''; row.style.pointerEvents='';
+          const targetBlock = placeholder.closest('.ww-block'); const targetLabel = targetBlock ? targetBlock.dataset.label : sourceLabel;
+          // beforeId is the id of the element currently at placeholder position
+          const nextEl = placeholder.nextElementSibling; const beforeId = nextEl && nextEl.hasAttribute('data-task-id') ? nextEl.getAttribute('data-task-id') : null;
+          placeholder.replaceWith(row);
+          if(targetLabel===sourceLabel){
+            // same block: reorder using container order
+            const idOrder=[...container.querySelectorAll('div[data-task-id]')].map(el=> el.dataset.taskId);
+            const curDate=wwDate.value||''; const groupTasks=wwTasks.filter(x=> x.date===curDate && x.bed===sourceLabel);
+            const sorted=groupTasks.slice().sort((a,b)=> idOrder.indexOf(a.id)-idOrder.indexOf(b.id));
+            let k=0; for(let i=0;i<wwTasks.length;i++){ if(wwTasks[i].date===curDate && wwTasks[i].bed===sourceLabel){ wwTasks[i]=sorted[k++]; } }
+            saveWW(wwTasks); renderWW();
+          } else {
+            moveTaskAcrossBlocks(taskId, targetLabel, beforeId);
+          }
+          dragState=null; document.body.style.userSelect='';
+        }
+        // Duplicate on double-tap of dot (mobile)
+        let lastTap=0; dot.addEventListener('touchend', (e)=>{
+          const now=Date.now(); if(!dragState && now-lastTap<250){
+            const curDate=wwDate.value||''; const newId='ww'+Date.now()+Math.floor(Math.random()*1000); wwTasks.push({id:newId,date:curDate,bed:bedLabel,task:t.task}); saveWW(wwTasks); renderWW(); }
+          lastTap=now;
+        });
+        function cancelDrag(){
+          if(!dragState) return; const {row,placeholder}=dragState; row.style.position=''; row.style.transform=''; row.style.opacity=''; row.style.boxShadow=''; if(placeholder.parentElement) placeholder.remove(); dragState=null; document.body.style.userSelect=''; renderWW();
+        }
+        dot.addEventListener('touchend', ()=>{ clearTimer(); if(dragState) finishDrag(); });
+        dot.addEventListener('touchcancel', ()=>{ clearTimer(); if(dragState) cancelDrag(); });
+      }
       listWrap.appendChild(row);
     });
     group.appendChild(header); group.appendChild(listWrap); wwList.appendChild(group);
+    // Drag-drop reordering for blocks
+  group.addEventListener('dragstart', (e)=>{ if(!e.target.closest('.ww-block-handle')){ e.preventDefault(); return; } e.dataTransfer.setData('text/plain', bedLabel); group.style.opacity='0.5'; });
+    group.addEventListener('dragend', ()=>{ group.style.opacity=''; group.style.borderColor='#ddd'; });
+    group.addEventListener('dragover', (e)=>{ e.preventDefault(); group.style.borderColor='#5b9cff'; });
+    group.addEventListener('dragleave', ()=>{ group.style.borderColor='#ddd'; });
+    group.addEventListener('drop', (e)=>{ e.preventDefault(); group.style.borderColor='#ddd'; const from=e.dataTransfer.getData('text/plain'); const to=bedLabel; if(!from||from===to) return; moveBlock(curDate, from, to); renderWW(); });
+  // Mobile long-press drag support (use dedicated handle)
+  enableMobileBlockDrag(blockHandle, group, bedLabel, curDate);
   });
   updateWWPreview();
 }
 
-wwAdd?.addEventListener('click', ()=>{
-  const date=wwDate.value||''; const bedRaw=(wwBed.value||'').trim(); const multi=(wwTask.value||'');
-  if(!date||!bedRaw||!multi.trim()) return;
-  const wardLabel=((wwWardInput?.value||'').trim()) || (wwWardSelect?.value||'').trim();
-  let bedLabel=bedRaw;
-  if(wardLabel && !bedLabel.startsWith(wardLabel+'/') && !bedLabel.startsWith(wardLabel+' ')){
-    bedLabel = wardLabel.includes('/') ? `${wardLabel} ${bedLabel}`.trim() : `${wardLabel}/${bedLabel}`.trim();
-  }
-  const lines=multi.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  if(lines.length===0) return;
-  lines.forEach(line=>{
-    wwTasks.push({ id:'ww'+Date.now()+Math.floor(Math.random()*1000), date, bed: bedLabel, task: line, ward: wardLabel||null });
-  });
-  saveWW(wwTasks);
-  wwTask.value='';
-  renderWW();
+// Create empty block (no auto extra blank rows)
+wwAddBlock?.addEventListener('click', ()=>{
+  const date=wwDate.value||''; if(!date) return;
+  const tempLabel = '(new) ' + (Date.now()%1e7) + '-' + Math.floor(Math.random()*1000);
+  wwTasks.push({ id:'ww'+Date.now()+Math.floor(Math.random()*1000), date, bed: tempLabel, task:'' });
+  saveWW(wwTasks); renderWW();
+  appendBlockIfMissing(date, tempLabel);
+  // focus newly created ward input after render
+  setTimeout(()=>{ const blocks=[...wwList.querySelectorAll('.ww-block')]; const last=blocks[blocks.length-1]; const w=last?.querySelector('.wwWard'); w?.focus(); }, 50);
 });
+
+// --- Mobile block drag (long press) ---
+let mbDragState=null; // {el,label,date,startY,offsetY,placeholder}
+function enableMobileBlockDrag(handleEl, dragEl, label, date){
+  const LONG_PRESS_MS=350;
+  let pressTimer=null; let touchId=null;
+  function clearTimer(){ if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; } }
+  handleEl.addEventListener('touchstart', (e)=>{
+    if(e.touches.length!==1) return; touchId=e.touches[0].identifier; const startY=e.touches[0].clientY;
+    pressTimer=setTimeout(()=>{ startMobileDrag(dragEl,label,date,startY); }, LONG_PRESS_MS);
+  }, {passive:true});
+  handleEl.addEventListener('touchmove', (e)=>{
+    if(pressTimer && e.touches.length===1){
+      const dy=Math.abs(e.touches[0].clientY - e.touches[0].screenY); // movement
+      if(dy>12) clearTimer();
+    }
+    if(mbDragState){
+      const t=[...e.touches].find(t=>t.identifier===touchId); if(!t) return;
+      e.preventDefault(); moveMobileDrag(t.clientY);
+    }
+  }, {passive:false});
+  handleEl.addEventListener('touchend', (e)=>{
+    clearTimer(); if(mbDragState){ finishMobileDrag(); }
+  });
+  handleEl.addEventListener('touchcancel', ()=>{ clearTimer(); if(mbDragState){ cancelMobileDrag(); } });
+}
+function startMobileDrag(el,label,date,startY){
+  const rect=el.getBoundingClientRect();
+  const ph=document.createElement('div');
+  ph.className='ww-block-placeholder';
+  ph.style.height=rect.height+'px'; ph.style.border='2px dashed #5b9cff'; ph.style.borderRadius='10px'; ph.style.margin='0';
+  el.parentElement.insertBefore(ph, el.nextSibling);
+  el.style.position='fixed'; el.style.left=rect.left+'px'; el.style.top=rect.top+'px'; el.style.width=rect.width+'px'; el.style.zIndex='2000'; el.style.opacity='0.9'; el.style.boxShadow='0 10px 30px rgba(0,0,0,0.25)';
+  mbDragState={el,label,date,startY,offsetY:0,placeholder:ph,origIndex:Array.from(wwList.children).indexOf(el)};
+  document.body.style.userSelect='none';
+}
+function moveMobileDrag(currentY){
+  if(!mbDragState) return;
+  const dy=currentY - mbDragState.startY; mbDragState.offsetY=dy; mbDragState.el.style.transform=`translateY(${dy}px)`;
+  // Find target position
+  const blocks=[...wwList.querySelectorAll('.ww-block')].filter(b=> b!==mbDragState.el);
+  let insertAfter=null; const dragCenter=currentY;
+  blocks.forEach(b=>{ const r=b.getBoundingClientRect(); if(dragCenter>r.top + r.height/2) insertAfter=b; });
+  if(insertAfter){ wwList.insertBefore(mbDragState.placeholder, insertAfter.nextSibling); }
+  else { wwList.insertBefore(mbDragState.placeholder, wwList.firstChild); }
+}
+function finishMobileDrag(){
+  const {el,label,date,placeholder}=mbDragState; el.style.position=''; el.style.left=''; el.style.top=''; el.style.width=''; el.style.zIndex=''; el.style.opacity=''; el.style.boxShadow=''; el.style.transform='';
+  document.body.style.userSelect='';
+  const siblings=[...wwList.querySelectorAll('.ww-block')].filter(b=> b!==el);
+  const newIndex=[...wwList.children].indexOf(placeholder);
+  placeholder.replaceWith(el);
+  const order=siblings.map(b=> b.dataset.label);
+  // Insert dragged label at newIndex relative to other labels
+  order.splice(newIndex,0,label);
+  saveBlockOrder(date, order);
+  mbDragState=null; renderWW();
+}
+function cancelMobileDrag(){
+  const {el,placeholder}=mbDragState||{}; if(el){ el.style.position=''; el.style.transform=''; el.style.opacity=''; el.style.boxShadow=''; }
+  if(placeholder&&placeholder.parentElement) placeholder.remove();
+  document.body.style.userSelect=''; mbDragState=null; renderWW();
+}
+
+function addEmptyTask(bedLabel, focus=false){
+  const curDate=wwDate.value||''; if(!bedLabel) return;
+  const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
+  wwTasks.push({ id:newId, date:curDate, bed: bedLabel, task:'' });
+  saveWW(wwTasks); renderWW();
+  if(focus){
+    setTimeout(()=>{
+      const block=[...wwList.querySelectorAll('.ww-block')].find(b=> b.dataset.label===bedLabel);
+      const ta=block?.querySelector(`textarea[data-id="${newId}"]`) || block?.querySelector('textarea[data-id]:last-of-type');
+      if(ta){ ta.focus(); ta.selectionStart=ta.selectionEnd=ta.value.length; }
+    },60);
+  }
+}
+
+function reorderTasks(bedLabel, fromId, toId){
+  const curDate=wwDate.value||'';
+  const indices=[]; const groupTasks=[];
+  wwTasks.forEach((t,i)=>{ if(t.date===curDate && t.bed===bedLabel){ indices.push(i); groupTasks.push(t); } });
+  const orderIds=groupTasks.map(t=>t.id);
+  const fromIdx=orderIds.indexOf(fromId); const toIdx=orderIds.indexOf(toId);
+  if(fromIdx<0||toIdx<0) return;
+  // remove and insert
+  const [moved]=groupTasks.splice(fromIdx,1);
+  groupTasks.splice(toIdx,0,moved);
+  // write back
+  for(let j=0;j<indices.length;j++){ wwTasks[indices[j]] = groupTasks[j]; }
+  saveWW(wwTasks); renderWW();
+}
+
+// Move a task to a different block (bedLabel) optionally before another task id (beforeId); if beforeId null append
+function moveTaskAcrossBlocks(taskId, targetBedLabel, beforeId){
+  const curDate=wwDate.value||'';
+  const task=wwTasks.find(t=> t.id===taskId && t.date===curDate);
+  if(!task || !targetBedLabel) return;
+  const originalBed=task.bed;
+  if(originalBed===targetBedLabel){
+    // same block: if beforeId provided reorder; else append at end
+    if(beforeId){ reorderTasks(targetBedLabel, taskId, beforeId); return; }
+    // append: remove then push to end
+    const groupIndices=[]; const groupTasks=[];
+    wwTasks.forEach((t,i)=>{ if(t.date===curDate && t.bed===targetBedLabel){ groupIndices.push(i); groupTasks.push(t); } });
+    const idx=groupTasks.findIndex(t=> t.id===taskId); if(idx<0) return;
+    const [mv]=groupTasks.splice(idx,1); groupTasks.push(mv);
+    for(let j=0;j<groupIndices.length;j++){ wwTasks[groupIndices[j]] = groupTasks[j]; }
+    saveWW(wwTasks); renderWW(); return;
+  }
+  // Different block: rebuild order for both affected blocks preserving overall sequence
+  const dateTasks=wwTasks.filter(t=> t.date===curDate);
+  task.bed=targetBedLabel; // assign new block label
+  // Build mapping of tasks by bed in desired order (keep existing order of wwTasks array except for task reposition)
+  const byBed=new Map();
+  dateTasks.forEach(t=>{ if(!byBed.has(t.bed)) byBed.set(t.bed, []); if(t.id!==taskId) byBed.get(t.bed).push(t); });
+  // Insert moved task into target bed tasks at position
+  const targetArr=byBed.get(targetBedLabel) || []; if(beforeId){
+    const pos=targetArr.findIndex(x=> x.id===beforeId); const insertPos= pos>=0? pos : targetArr.length; targetArr.splice(insertPos,0, task);
+  } else targetArr.push(task);
+  byBed.set(targetBedLabel, targetArr);
+  // Reconstruct wwTasks for this date following saved block ordering
+  const orderLabels=getOrderedLabels(curDate, Array.from(byBed.keys()));
+  const rebuilt=[];
+  orderLabels.forEach(lbl=>{ const arr=byBed.get(lbl)||[]; arr.forEach(t=> rebuilt.push(t)); });
+  // Write back into wwTasks maintaining other dates unaffected
+  let k=0; for(let i=0;i<wwTasks.length;i++){ if(wwTasks[i].date===curDate){ wwTasks[i]=rebuilt[k++]; } }
+  saveWW(wwTasks); renderWW();
+}
+
+// Template for extra entry blocks (Ward, Bed, Tasks)
+// Dynamic entry blocks removed (rendered groups are now the input/edit surface)
 wwCopy?.addEventListener('click', async ()=>{
   const text=wwPreviewTa.value||'';
   let ok=false;
@@ -2254,21 +2816,46 @@ wwCopy?.addEventListener('click', async ()=>{
   wwCopy.textContent= ok? 'Copied' : 'Copy failed';
   setTimeout(()=> wwCopy.textContent='Copy', 1200);
 });
+// Mobile preview copy
+document.getElementById('wwCopyMobile')?.addEventListener('click', async ()=>{
+  const text=document.getElementById('wwPreviewMobile')?.textContent||'';
+  let ok=false; try{ await navigator.clipboard.writeText(text); ok=true; }catch{}
+  if(!ok){ try{ const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); ok=true; }catch{} }
+  const btn=document.getElementById('wwCopyMobile'); if(btn){ btn.textContent= ok? 'Copied':'Copy failed'; setTimeout(()=> btn.textContent='Copy',1200); }
+});
+// Mobile preview sheet interactions
+const wwMobileSheet=document.getElementById('wwMobilePreviewSheet');
+const wwTogglePreview=document.getElementById('wwTogglePreview');
+const wwCloseSheet=document.getElementById('wwCloseSheet');
+const wwSheetGrabber=document.getElementById('wwSheetGrabber');
+const WW_MOBILE_H_KEY='ww-mobile-preview-h-v1';
+const WW_MOBILE_OPEN_KEY='ww-mobile-preview-open-v1';
+function wwOpenSheet(){ if(!wwMobileSheet) return; wwMobileSheet.classList.add('open'); try{ localStorage.setItem(WW_MOBILE_OPEN_KEY,'true'); }catch{} }
+function wwCloseSheetFn(){ if(!wwMobileSheet) return; wwMobileSheet.classList.remove('open'); try{ localStorage.setItem(WW_MOBILE_OPEN_KEY,'false'); }catch{} }
+wwTogglePreview?.addEventListener('click', ()=>{ if(wwMobileSheet.classList.contains('open')) wwCloseSheetFn(); else wwOpenSheet(); });
+wwCloseSheet?.addEventListener('click', wwCloseSheetFn);
+// resize by drag
+let wwResizing=false, wwStartY=0, wwStartH=0;
+function wwStartResize(ev){ if(!wwMobileSheet) return; wwResizing=true; wwStartY=(ev.touches?ev.touches[0].clientY:ev.clientY); wwStartH=wwMobileSheet.getBoundingClientRect().height; document.body.style.userSelect='none'; }
+function wwDoResize(ev){ if(!wwResizing||!wwMobileSheet) return; const y=(ev.touches?ev.touches[0].clientY:ev.clientY); const dy=wwStartY - y; let newH = wwStartH + dy; const vh = window.innerHeight; if(newH < vh*0.25) newH = vh*0.25; if(newH > vh*0.9) newH = vh*0.9; wwMobileSheet.style.height = newH + 'px'; }
+function wwStopResize(){ if(!wwResizing) return; wwResizing=false; document.body.style.userSelect=''; try{ const h = wwMobileSheet.getBoundingClientRect().height; const vh=window.innerHeight; localStorage.setItem(WW_MOBILE_H_KEY, ((h/vh)*100).toFixed(2)); }catch{} }
+wwSheetGrabber?.addEventListener('mousedown', wwStartResize); document.addEventListener('mousemove', wwDoResize); document.addEventListener('mouseup', wwStopResize);
+wwSheetGrabber?.addEventListener('touchstart', wwStartResize, {passive:true}); document.addEventListener('touchmove', wwDoResize, {passive:false}); document.addEventListener('touchend', wwStopResize);
+// apply saved height/open state
+try{ const hPerc=parseFloat(localStorage.getItem(WW_MOBILE_H_KEY)||''); if(!Number.isNaN(hPerc)&&wwMobileSheet){ wwMobileSheet.style.height = hPerc + 'vh'; } }catch{}
+try{ const open=localStorage.getItem(WW_MOBILE_OPEN_KEY); if(open==='true') wwOpenSheet(); }catch{}
 
-// Pick bed via select
-wwBedSelect?.addEventListener('change', ()=>{
-  if(!wwBedSelect.value) return;
-  wwBed.value = wwBedSelect.value;
-  wwTask.focus();
+// No ward picker; suggestions are in wwBed datalist
+
+// Persist title and live-update preview
+wwTitle?.addEventListener('input', ()=>{
+  try{ localStorage.setItem('ww-title', wwTitle.value||''); }catch{}
+  updateWWPreview();
 });
 
-// When ward changes, refresh bed options and focus bed field
-wwWardSelect?.addEventListener('change', ()=>{
-  refreshWWSuggestions();
-  wwBed.focus();
-});
-wwWardInput?.addEventListener('input', ()=>{
-  refreshWWSuggestions();
+// Re-render when date changes
+wwDate?.addEventListener('change', ()=>{
+  renderWW();
 });
 
 // Preview show/hide toggle (persisted)
@@ -2288,13 +2875,9 @@ wwPreviewToggle?.addEventListener('click', ()=>{
 try{ const saved=JSON.parse(localStorage.getItem(WW_PREVIEW_OPEN_KEY)||'true'); applyWWPreviewOpen(!!saved); }catch{ applyWWPreviewOpen(true); }
 
 // Enter key flows
-wwBed?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); wwTask?.focus(); } });
-// In textarea: plain Enter = newline; Cmd/Ctrl+Enter = Add all lines as tasks
-wwTask?.addEventListener('keydown', (e)=>{ 
-  if(e.key==='Enter' && (e.metaKey || e.ctrlKey)){
-    e.preventDefault(); wwAdd?.click();
-  }
-});
+// Removed standalone bed/task entry keyboard handling (inline editing only now)
+
+// Removed automatic blank row mechanism; manual add only
 
 function openProfilePage(bed, opts={}){
   selectedBedId=bed.id;
