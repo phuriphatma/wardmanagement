@@ -2428,12 +2428,16 @@ function renderWW(){
   const blockHandle=document.createElement('span'); blockHandle.textContent='≡'; blockHandle.className='ww-block-handle';
   // Editable ward/bed fields split into two inputs on the same line with tight separator
   const wbWrap=document.createElement('div'); wbWrap.style.display='flex'; wbWrap.style.alignItems='center'; wbWrap.style.gap='6px';
-  const wardInp=document.createElement('input'); wardInp.type='text'; wardInp.placeholder='ward'; wardInp.className='wwWard'; wardInp.setAttribute('list','wwWardListGlobal');
+  const wardInp=document.createElement('input'); wardInp.type='text'; wardInp.placeholder='ward'; wardInp.className='wwWard';
+  // Remove datalist to prevent browser autocomplete dropdown on mobile
+  // wardInp.setAttribute('list','wwWardListGlobal');
   wardInp.style.fontSize='16px'; wardInp.style.padding='8px 10px'; wardInp.style.height='36px'; wardInp.style.lineHeight='20px';
   const sep=document.createElement('span'); sep.textContent='/'; sep.style.textAlign='center'; sep.style.color='#666'; sep.style.margin='0 4px';
   const bedInp=document.createElement('input'); bedInp.type='text'; bedInp.placeholder='bed/room'; bedInp.style.width='100%'; bedInp.className='wwBed';
   bedInp.style.fontSize='16px'; bedInp.style.padding='8px 10px'; bedInp.style.height='36px'; bedInp.style.lineHeight='20px';
-  const bedList=document.createElement('datalist'); bedList.setAttribute('data-bedlist','1'); const bedListId='wwBedList-'+Math.floor(Math.random()*1e9); bedList.id=bedListId; bedInp.setAttribute('list', bedListId);
+  // Keep bedList element for backward compatibility but don't link it to input
+  const bedList=document.createElement('datalist'); bedList.setAttribute('data-bedlist','1'); const bedListId='wwBedList-'+Math.floor(Math.random()*1e9); bedList.id=bedListId; 
+  // bedInp.setAttribute('list', bedListId); // Removed to prevent browser autocomplete
   // picker buttons
   const wardPickBtn=document.createElement('button'); wardPickBtn.textContent='▾'; wardPickBtn.className='ghost'; wardPickBtn.title='Pick ward'; wardPickBtn.style.minWidth='36px'; wardPickBtn.style.height='36px';
   const bedPickBtn=document.createElement('button'); bedPickBtn.textContent='▾'; bedPickBtn.className='ghost'; bedPickBtn.title='Pick bed'; bedPickBtn.style.minWidth='36px'; bedPickBtn.style.height='36px';
