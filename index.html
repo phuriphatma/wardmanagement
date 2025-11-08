@@ -343,16 +343,34 @@ body.collapsed #expandSidebarBtn{display:none}
   <div id="wardWorkPage" style="display:none;flex-direction:column;padding:16px 16px 140px 16px;overflow-y:auto;width:100%;">
       <button id="backToBedsFromWW" style="margin-bottom:12px;">← Back</button>
       <header>
-        <h2>Ward Work</h2>
-        <div style="color:#666;font-size:12px;margin-top:4px;">Fast list for daily wardwork tasks</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <h2 style="margin:0;">Ward Work</h2>
+          <div id="wwProfilesMenu" style="position:relative;">
+            <button id="wwProfileMenuBtn" class="ghost" style="border:1px solid #ddd; padding:6px 10px; border-radius:6px;">Document</button>
+            <div id="wwProfileMenuPanel" style="display:none; position:absolute; right:0; top:100%; margin-top:6px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,0.1); width:280px; max-height:60vh; overflow:auto; z-index:50;">
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #eee;">
+                <strong>WardWork Documents</strong>
+                <button id="wwCloseProfilePanel" class="ghost" title="Close">×</button>
+              </div>
+              <ul id="wwProfileList" style="list-style:none; margin:0; padding:6px 0;"></ul>
+              <div style="display:flex; gap:6px; padding:10px 12px; border-top:1px solid #eee; position:sticky; bottom:0; background:#fff; flex-wrap:wrap;">
+                <button id="wwProfNewBtn" title="New document">New</button>
+                <button id="wwProfDupBtn" title="Duplicate current">Dup</button>
+                <button id="wwProfRenBtn" title="Rename">Ren</button>
+                <button id="wwProfDelBtn" title="Delete" class="delete">Del</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="color:#666;font-size:12px;margin-top:4px;">Fast list for wardwork tasks</div>
       </header>
       <section class="card" style="max-width:720px;">
         <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;">
-          <label style="flex:1;min-width:160px;">Date
+          <label style="flex:0 0 auto;min-width:140px;">Date
             <input type="date" id="wwDate" />
           </label>
-          <label style="flex:1;min-width:160px;">Title
-            <input type="text" id="wwTitle" placeholder="e.g., WW or AM round" />
+          <label style="flex:1;min-width:200px;">Title
+            <input type="text" id="wwTitle" placeholder="e.g., 🔆 WW 8/11/25 🔆" />
           </label>
         </div>
         <datalist id="wwWardListGlobal"></datalist>
@@ -405,6 +423,27 @@ body.collapsed #expandSidebarBtn{display:none}
             <button id="wwSnipAdd" class="save-btn">Add</button>
           </div>
           <div style="margin-top:8px; font-size:12px; color:#666;">Tip: Tap ⧉+ on a block to insert a snippet quickly.</div>
+        </div>
+      </div>
+      <!-- WardWork Rename Modal -->
+      <div id="wwRenameModal" class="modal">
+        <div class="modal-content" style="max-width:480px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">
+            <h2 style="margin:0;">Rename Document</h2>
+            <button id="wwRenameClose" class="ghost" title="Close">×</button>
+          </div>
+          <label style="display:block; margin-bottom:12px;">
+            Document Name
+            <input id="wwRenameNameInput" type="text" style="width:100%; padding:8px; margin-top:4px;" />
+          </label>
+          <label style="display:block; margin-bottom:12px;">
+            Document Title
+            <input id="wwRenameTitleInput" type="text" style="width:100%; padding:8px; margin-top:4px;" />
+          </label>
+          <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button id="wwRenameCancel" class="ghost">Cancel</button>
+            <button id="wwRenameSave" class="save-btn">Save</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1581,10 +1620,19 @@ resizer.addEventListener('touchstart', startResize, { passive: true });
 document.addEventListener('touchmove', doResize, { passive: false });
 document.addEventListener('touchend', stopResize);
 
+// Ward Work storage variables - declared early to avoid initialization errors
+const WW_PROFILES_KEY='wardWorkProfiles-v2';
+const WW_CURRENT_KEY='wardWorkCurrent-v2';
+let wwProfiles = {}; // { [id]: { id, name, title, tasks: [{id,bed,task}] } }
+let currentWWProfileId = null;
+
 // Initialize profiles and UI
 loadProfiles();
 refreshProfileUI();
 renderWards();renderBeds();
+
+// Initialize WardWork profiles
+loadWWProfiles();
 
 // ===== Move Bed wiring =====
 const moveBedModal=document.getElementById('moveBedModal');
@@ -2189,6 +2237,22 @@ const wwAddBlock=document.getElementById('wwAddBlock');
 const wwList=document.getElementById('wwList');
 const wwPreviewTa=document.getElementById('wwPreviewTa');
 const wwCopy=document.getElementById('wwCopy');
+// WardWork Profile UI elements
+const wwProfileMenuBtn=document.getElementById('wwProfileMenuBtn');
+const wwProfileMenuPanel=document.getElementById('wwProfileMenuPanel');
+const wwCloseProfilePanel=document.getElementById('wwCloseProfilePanel');
+const wwProfileList=document.getElementById('wwProfileList');
+const wwProfNewBtn=document.getElementById('wwProfNewBtn');
+const wwProfDupBtn=document.getElementById('wwProfDupBtn');
+const wwProfRenBtn=document.getElementById('wwProfRenBtn');
+const wwProfDelBtn=document.getElementById('wwProfDelBtn');
+// WardWork Rename Modal elements
+const wwRenameModal=document.getElementById('wwRenameModal');
+const wwRenameClose=document.getElementById('wwRenameClose');
+const wwRenameNameInput=document.getElementById('wwRenameNameInput');
+const wwRenameTitleInput=document.getElementById('wwRenameTitleInput');
+const wwRenameCancel=document.getElementById('wwRenameCancel');
+const wwRenameSave=document.getElementById('wwRenameSave');
 // (Dynamic per-block bed lists will be generated). Global ward suggestions list:
 const wwWardListGlobal=document.getElementById('wwWardListGlobal');
 // Snippets UI
@@ -2201,11 +2265,168 @@ const wwSnipCloseBtn=document.getElementById('wwSnipClose');
 const wwSnipAddBtn=document.getElementById('wwSnipAdd');
 const wwSnipNewInput=document.getElementById('wwSnipNew');
 
-// Ward Work storage
-const WW_KEY='wardWorkTasks-v1';
-function loadWW(){ try{ return JSON.parse(localStorage.getItem(WW_KEY)||'[]'); }catch{ return []; } }
-function saveWW(arr){ try{ localStorage.setItem(WW_KEY, JSON.stringify(arr||[])); }catch{} }
-let wwTasks=loadWW(); // shape: {id, date, bed, task, blank?}
+// Ward Work storage variables declared earlier (before loadWWProfiles call)
+// const WW_PROFILES_KEY='wardWorkProfiles-v2';
+// const WW_CURRENT_KEY='wardWorkCurrent-v2';
+// let wwProfiles = {}; // { [id]: { id, name, title, tasks: [{id,bed,task}] } }
+// let currentWWProfileId = null;
+
+function loadWWProfiles(){
+  try{
+    const raw = localStorage.getItem(WW_PROFILES_KEY);
+    wwProfiles = raw ? JSON.parse(raw) : {};
+    currentWWProfileId = localStorage.getItem(WW_CURRENT_KEY);
+    
+    // Migration from old date-based system
+    if(Object.keys(wwProfiles).length === 0){
+      const oldTasks = loadOldWWTasks();
+      if(oldTasks.length > 0){
+        // Group old tasks by date and create profiles
+        const byDate = {};
+        oldTasks.forEach(t => {
+          if(!byDate[t.date]) byDate[t.date] = [];
+          byDate[t.date].push({ id: t.id, bed: t.bed, task: t.task });
+        });
+        Object.keys(byDate).forEach(date => {
+          const id = 'ww' + Date.now() + Math.floor(Math.random()*1000);
+          const ddmmyy = wwFormatDDMMYY(date);
+          wwProfiles[id] = {
+            id,
+            name: `WW ${ddmmyy}`,
+            title: `🔆 WW ${ddmmyy} 🔆`,
+            date: date,
+            tasks: byDate[date]
+          };
+        });
+      }
+    }
+    
+    // Create default if empty
+    if(Object.keys(wwProfiles).length === 0){
+      const now = new Date();
+      const iso = now.toISOString().slice(0,10);
+      const ddmmyy = wwFormatDDMMYY(iso);
+      const time = now.toTimeString().slice(0,5); // HH:MM
+      const id = 'ww' + Date.now();
+      wwProfiles[id] = {
+        id,
+        name: `ww ${ddmmyy} ${time}`,
+        title: `🔆 WW ${ddmmyy} 🔆`,
+        date: iso,
+        tasks: []
+      };
+      currentWWProfileId = id;
+    }
+    
+    // Ensure all profiles have a date field (migration)
+    Object.values(wwProfiles).forEach(prof => {
+      if(!prof.date) {
+        prof.date = new Date().toISOString().slice(0,10);
+      }
+    });
+    
+    // Ensure current is valid
+    if(!currentWWProfileId || !wwProfiles[currentWWProfileId]){
+      currentWWProfileId = Object.keys(wwProfiles)[0];
+    }
+  }catch{
+    wwProfiles = {};
+    currentWWProfileId = null;
+  }
+}
+
+function loadOldWWTasks(){
+  const WW_KEY='wardWorkTasks-v1';
+  try{ return JSON.parse(localStorage.getItem(WW_KEY)||'[]'); }catch{ return []; }
+}
+
+function saveWWProfiles(){
+  try{
+    localStorage.setItem(WW_PROFILES_KEY, JSON.stringify(wwProfiles));
+    localStorage.setItem(WW_CURRENT_KEY, currentWWProfileId);
+  }catch{}
+}
+
+function getCurrentWWProfile(){
+  return wwProfiles[currentWWProfileId] || null;
+}
+
+function switchWWProfile(id){
+  if(wwProfiles[id]){
+    currentWWProfileId = id;
+    saveWWProfiles();
+    loadCurrentWWProfile();
+  }
+}
+
+function createWWProfile(name, title, date){
+  const id = 'ww' + Date.now() + Math.floor(Math.random()*1000);
+  const today = new Date().toISOString().slice(0,10);
+  wwProfiles[id] = { 
+    id, 
+    name: name || 'Untitled', 
+    title: title || '🔆 Untitled 🔆', 
+    date: date || today,
+    tasks: [] 
+  };
+  currentWWProfileId = id;
+  saveWWProfiles();
+  loadCurrentWWProfile();
+  return id;
+}
+
+function deleteWWProfile(id){
+  if(Object.keys(wwProfiles).length <= 1){
+    alert('Cannot delete the last WardWork document.');
+    return;
+  }
+  delete wwProfiles[id];
+  if(currentWWProfileId === id){
+    currentWWProfileId = Object.keys(wwProfiles)[0];
+  }
+  saveWWProfiles();
+  loadCurrentWWProfile();
+}
+
+function renameWWProfile(id, name, title){
+  if(wwProfiles[id]){
+    wwProfiles[id].name = name;
+    wwProfiles[id].title = title;
+    saveWWProfiles();
+  }
+}
+
+function loadCurrentWWProfile(){
+  const prof = getCurrentWWProfile();
+  if(!prof) {
+    wwTasks = [];
+    renderWW();
+    return;
+  }
+  
+  // Load tasks from profile
+  wwTasks = prof.tasks || [];
+  
+  // Update UI
+  if(wwDate) wwDate.value = prof.date || new Date().toISOString().slice(0,10);
+  if(wwTitle) wwTitle.value = prof.title || '';
+  
+  // Update profile selector button
+  updateWWProfileUI();
+  
+  renderWW();
+}
+
+// Legacy functions (keeping for compatibility)
+function loadWW(){ const prof = getCurrentWWProfile(); return prof ? prof.tasks : []; }
+function saveWW(tasks){ 
+  const prof = getCurrentWWProfile();
+  if(prof){ 
+    prof.tasks = tasks;
+    saveWWProfiles();
+  }
+}
+let wwTasks = []; // will be loaded from current profile
 // WardWork snippets storage
 const WW_SNIPPETS_KEY='ww-snippets-v1';
 function loadWWSnippets(){ try{ return JSON.parse(localStorage.getItem(WW_SNIPPETS_KEY)||'[]'); }catch{ return []; } }
@@ -2214,58 +2435,268 @@ let wwSnippets=loadWWSnippets(); // array of { id, text }
 // Internal separator for storing ward and bed together without interfering with user-entered '/'
 const WW_BLOCK_SEP='\u001F';
 
-// Block ordering persistence per date
-const WW_BLOCK_ORDER_PREFIX='ww-block-order-v1:';
-function loadBlockOrder(dateStr){
-  try{ return JSON.parse(localStorage.getItem(WW_BLOCK_ORDER_PREFIX+dateStr)||'[]'); }catch{ return []; }
+// Block ordering persistence per profile (changed from date to profile ID)
+const WW_BLOCK_ORDER_PREFIX='ww-block-order-v2:';
+function loadBlockOrder(profileId){
+  try{ return JSON.parse(localStorage.getItem(WW_BLOCK_ORDER_PREFIX+profileId)||'[]'); }catch{ return []; }
 }
-function saveBlockOrder(dateStr, arr){
-  try{ localStorage.setItem(WW_BLOCK_ORDER_PREFIX+dateStr, JSON.stringify(arr||[])); }catch{}
+function saveBlockOrder(profileId, arr){
+  try{ localStorage.setItem(WW_BLOCK_ORDER_PREFIX+profileId, JSON.stringify(arr||[])); }catch{}
 }
-function getOrderedLabels(dateStr, labels){
-  const existing=loadBlockOrder(dateStr);
+function getOrderedLabels(profileId, labels){
+  const existing=loadBlockOrder(profileId);
   // keep only labels that still exist
   let order=existing.filter(x=> labels.includes(x));
   // append any new labels not in order yet
   labels.forEach(l=>{ if(!order.includes(l)) order.push(l); });
   return order;
 }
-function moveBlock(dateStr, fromLabel, toLabel){
+function moveBlock(profileId, fromLabel, toLabel){
   if(fromLabel===toLabel) return;
-  const order=getOrderedLabels(dateStr, []);
+  const order=loadBlockOrder(profileId);
   const fi=order.indexOf(fromLabel); const ti=order.indexOf(toLabel);
   if(fi<0 || ti<0) return;
   const [m]=order.splice(fi,1);
   order.splice(ti,0,m);
-  saveBlockOrder(dateStr, order);
+  saveBlockOrder(profileId, order);
 }
-function appendBlockIfMissing(dateStr, label){
-  const order=loadBlockOrder(dateStr);
-  if(!order.includes(label)){ order.push(label); saveBlockOrder(dateStr, order); }
+function appendBlockIfMissing(profileId, label){
+  const order=loadBlockOrder(profileId);
+  if(!order.includes(label)){ order.push(label); saveBlockOrder(profileId, order); }
 }
-function replaceBlockLabel(dateStr, oldLabel, newLabel){
-  const order=loadBlockOrder(dateStr);
+function replaceBlockLabel(profileId, oldLabel, newLabel){
+  const order=loadBlockOrder(profileId);
   const idx=order.indexOf(oldLabel);
-  if(idx>=0){ order[idx]=newLabel; saveBlockOrder(dateStr, order); }
+  if(idx>=0){ order[idx]=newLabel; saveBlockOrder(profileId, order); }
 }
-function removeBlockLabel(dateStr, label){
-  const order=loadBlockOrder(dateStr).filter(x=> x!==label);
-  saveBlockOrder(dateStr, order);
+function removeBlockLabel(profileId, label){
+  const order=loadBlockOrder(profileId).filter(x=> x!==label);
+  saveBlockOrder(profileId, order);
 }
 
 function openWardWork(){
   bedContainer.style.display='none';
   profilePage.style.display='none';
   wardWorkPage.style.display='flex';
-  // default date = today if empty
-  if(!wwDate.value){ const d=new Date(); const iso=d.toISOString().slice(0,10); wwDate.value=iso; }
-  // load saved title if any
-  try{ const saved=localStorage.getItem('ww-title'); if(saved && wwTitle){ wwTitle.value=saved; } }catch{}
-  ensureDecoratedTitleForDate();
+  
+  // Load profiles on first open
+  if(!wwProfiles || Object.keys(wwProfiles).length === 0){
+    loadWWProfiles();
+  }
+  
+  // Ensure we have a current profile
+  if(!currentWWProfileId || !wwProfiles[currentWWProfileId]){
+    const firstId = Object.keys(wwProfiles)[0];
+    if(firstId){
+      currentWWProfileId = firstId;
+    } else {
+      // Create a default profile if none exist
+      const now = new Date();
+      const iso = now.toISOString().slice(0,10);
+      const ddmmyy = wwFormatDDMMYY(iso);
+      const time = now.toTimeString().slice(0,5); // HH:MM
+      const id = 'ww' + Date.now();
+      wwProfiles[id] = {
+        id,
+        name: `ww ${ddmmyy} ${time}`,
+        title: `🔆 WW ${ddmmyy} 🔆`,
+        date: iso,
+        tasks: []
+      };
+      currentWWProfileId = id;
+      saveWWProfiles();
+    }
+  }
+  
+  loadCurrentWWProfile();
   refreshWWSuggestions();
   buildWWSnippetsUI(); // ensure modal list is ready
-  renderWW();
 }
+
+function updateWWProfileUI(){
+  const prof = getCurrentWWProfile();
+  if(wwProfileMenuBtn){
+    wwProfileMenuBtn.textContent = prof ? prof.name : 'Document';
+  }
+  
+  if(wwProfileList){
+    wwProfileList.innerHTML = '';
+    Object.values(wwProfiles).forEach(p => {
+      const li = document.createElement('li');
+      li.textContent = p.name || p.id;
+      li.style.padding = '8px 12px';
+      li.style.cursor = 'pointer';
+      if(p.id === currentWWProfileId){
+        li.style.fontWeight = '600';
+        li.style.background = '#f5f5f5';
+      }
+      li.addEventListener('click', () => {
+        switchWWProfile(p.id);
+        closeWWProfilePanel();
+      });
+      wwProfileList.appendChild(li);
+    });
+  }
+}
+
+function openWWProfilePanel(){
+  if(wwProfileMenuPanel){
+    updateWWProfileUI();
+    wwProfileMenuPanel.style.display = 'block';
+  }
+}
+
+function closeWWProfilePanel(){
+  if(wwProfileMenuPanel) wwProfileMenuPanel.style.display = 'none';
+}
+
+// Profile menu bindings
+wwProfileMenuBtn?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = wwProfileMenuPanel && wwProfileMenuPanel.style.display === 'block';
+  if(open) closeWWProfilePanel();
+  else openWWProfilePanel();
+});
+
+wwCloseProfilePanel?.addEventListener('click', closeWWProfilePanel);
+
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('wwProfilesMenu');
+  if(menu && !menu.contains(e.target)) closeWWProfilePanel();
+});
+
+wwProfNewBtn?.addEventListener('click', () => {
+  const now = new Date();
+  const iso = now.toISOString().slice(0,10);
+  const ddmmyy = wwFormatDDMMYY(iso);
+  const time = now.toTimeString().slice(0,5); // HH:MM
+  
+  const name = `ww ${ddmmyy} ${time}`;
+  const title = `🔆 WW ${ddmmyy} 🔆`;
+  
+  createWWProfile(name, title, iso);
+  closeWWProfilePanel();
+});
+
+wwProfDupBtn?.addEventListener('click', () => {
+  const prof = getCurrentWWProfile();
+  if(!prof) return;
+  const name = prompt('Duplicate as', prof.name + ' Copy');
+  if(name == null) return;
+  const id = 'ww' + Date.now() + Math.floor(Math.random()*1000);
+  wwProfiles[id] = {
+    id,
+    name: name.trim() || prof.name + ' Copy',
+    title: (prof.title || '') + ' (copy)',
+    date: prof.date || new Date().toISOString().slice(0,10),
+    tasks: JSON.parse(JSON.stringify(prof.tasks || []))
+  };
+  currentWWProfileId = id;
+  saveWWProfiles();
+  loadCurrentWWProfile();
+  closeWWProfilePanel();
+});
+
+wwProfRenBtn?.addEventListener('click', () => {
+  const prof = getCurrentWWProfile();
+  if(!prof) return;
+  
+  // Open rename modal with current values
+  if(wwRenameNameInput) wwRenameNameInput.value = prof.name;
+  if(wwRenameTitleInput) wwRenameTitleInput.value = prof.title || '';
+  if(wwRenameModal) wwRenameModal.style.display = 'flex';
+  
+  // Select all text in name input for easy replacement
+  setTimeout(() => {
+    if(wwRenameNameInput) {
+      wwRenameNameInput.focus();
+      wwRenameNameInput.select();
+    }
+  }, 50);
+  
+  closeWWProfilePanel();
+});
+
+// WardWork Rename Modal handlers
+function closeWWRenameModal() {
+  if(wwRenameModal) wwRenameModal.style.display = 'none';
+}
+
+wwRenameClose?.addEventListener('click', closeWWRenameModal);
+wwRenameCancel?.addEventListener('click', closeWWRenameModal);
+
+wwRenameSave?.addEventListener('click', () => {
+  const prof = getCurrentWWProfile();
+  if(!prof) return;
+  
+  const newName = wwRenameNameInput?.value.trim() || prof.name;
+  const newTitle = wwRenameTitleInput?.value.trim() || prof.title;
+  
+  renameWWProfile(prof.id, newName, newTitle);
+  if(wwTitle) wwTitle.value = newTitle;
+  updateWWProfileUI();
+  closeWWRenameModal();
+});
+
+// Close modal on backdrop click
+wwRenameModal?.addEventListener('click', (e) => {
+  if(e.target === wwRenameModal) closeWWRenameModal();
+});
+
+// Handle Enter key to save
+wwRenameNameInput?.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') {
+    e.preventDefault();
+    wwRenameTitleInput?.focus();
+    wwRenameTitleInput?.select();
+  }
+});
+
+wwRenameTitleInput?.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') {
+    e.preventDefault();
+    wwRenameSave?.click();
+  }
+});
+
+wwProfDelBtn?.addEventListener('click', () => {
+  const prof = getCurrentWWProfile();
+  if(!prof) return;
+  if(!confirm(`Delete "${prof.name}"?`)) return;
+  deleteWWProfile(prof.id);
+  closeWWProfilePanel();
+});
+
+// Date picker - update title when date changes
+wwDate?.addEventListener('change', () => {
+  const prof = getCurrentWWProfile();
+  if(!prof) return;
+  
+  const dateStr = wwDate.value;
+  if(!dateStr) return;
+  
+  // Update profile date
+  prof.date = dateStr;
+  
+  // Auto-update title to match date format
+  const ddmmyy = wwFormatDDMMYY(dateStr);
+  const newTitle = `🔆 WW ${ddmmyy} 🔆`;
+  prof.title = newTitle;
+  if(wwTitle) wwTitle.value = newTitle;
+  
+  saveWWProfiles();
+  updateWWPreview();
+});
+
+// Title input - update profile when title changes
+wwTitle?.addEventListener('change', () => {
+  const prof = getCurrentWWProfile();
+  if(!prof) return;
+  prof.title = wwTitle.value;
+  saveWWProfiles();
+  updateWWPreview();
+});
+
 function backFromWW(){ wardWorkPage.style.display='none'; bedContainer.style.display='block'; }
 wardWorkBtn?.addEventListener('click', openWardWork);
 backToBedsFromWW?.addEventListener('click', backFromWW);
@@ -2345,17 +2776,31 @@ function formatWWHeader(dateStr){
   }catch{ return '🔆 WW 🔆'; }
 }
 function updateWWPreview(){
-  const curDate=wwDate.value||'';
-  const list=wwTasks.filter(t=>t.date===curDate && (t.task||'').trim()!=='');
-  const groups=new Map();
-  list.forEach(t=>{ if(!groups.has(t.bed)) groups.set(t.bed, []); groups.get(t.bed).push(t.task); });
-  const decoratedTitle=(wwTitle?.value||'').trim();
-  const fallback = (()=>{ const t='WW'; const dt=wwFormatDDMMYY(curDate); return dt? `🔆 ${t} ${dt} 🔆` : `🔆 ${t} 🔆`; })();
-  const lines=[decoratedTitle || fallback,''];
-  Array.from(groups.entries()).forEach(([bed,tasks])=>{
-    let display=bed;
-    if(typeof bed==='string' && bed.includes(WW_BLOCK_SEP)){
-      const [w,b]=bed.split(WW_BLOCK_SEP);
+  const prof = getCurrentWWProfile();
+  if(!prof) return;
+  
+  const list = prof.tasks.filter(t => (t.task||'').trim() !== '');
+  const groups = new Map();
+  list.forEach(t => {
+    if(!groups.has(t.bed)) groups.set(t.bed, []);
+    groups.get(t.bed).push(t.task);
+  });
+  
+  const decoratedTitle = (wwTitle?.value || prof.title || '').trim();
+  const lines = [decoratedTitle || '🔆 WW 🔆', ''];
+  
+  // Get ordered bed labels
+  const bedLabels = Array.from(groups.keys());
+  const orderedLabels = getOrderedLabels(prof.id, bedLabels);
+  
+  // Iterate in the correct order
+  orderedLabels.forEach(bed => {
+    const tasks = groups.get(bed);
+    if(!tasks) return;
+    
+    let display = bed;
+    if(typeof bed === 'string' && bed.includes(WW_BLOCK_SEP)){
+      const [w, b] = bed.split(WW_BLOCK_SEP);
       if(b){
         const sep = (w||'').includes('/') ? ' ' : '/';
         display = `${w}${sep}${b}`;
@@ -2364,11 +2809,13 @@ function updateWWPreview(){
       }
     }
     lines.push(display);
-    tasks.forEach(tsk=> lines.push('⭕️ '+tsk));
+    tasks.forEach(tsk => lines.push('⭕️ ' + tsk));
     lines.push('');
   });
+  
   wwPreviewTa.value = lines.join('\n').trim();
-  const mob=document.getElementById('wwPreviewMobile'); if(mob) mob.textContent = wwPreviewTa.value;
+  const mob = document.getElementById('wwPreviewMobile');
+  if(mob) mob.textContent = wwPreviewTa.value;
 }
 // Build / refresh snippet chips panel
 function buildWWSnippetsUI(){
@@ -2409,12 +2856,14 @@ function quickInsertSnippet(text){
   setTimeout(()=>{ const ta=targetBlock.querySelector(`textarea[data-id="${newId}"]`); ta?.focus(); },60);
 }
 function renderWW(){
-  const curDate=wwDate.value||'';
-  const list=wwTasks.filter(t=>t.date===curDate);
+  const prof = getCurrentWWProfile();
+  if(!prof){ wwList.innerHTML = ''; return; }
+  
+  wwTasks = prof.tasks; // Sync working array
   wwList.innerHTML='';
   const byBed=new Map();
-  list.forEach(t=>{ const key=(t.bed||''); if(!byBed.has(key)) byBed.set(key, []); byBed.get(key).push(t); });
-  const labelsOrdered = getOrderedLabels(curDate, Array.from(byBed.keys()));
+  wwTasks.forEach(t=>{ const key=(t.bed||''); if(!byBed.has(key)) byBed.set(key, []); byBed.get(key).push(t); });
+  const labelsOrdered = getOrderedLabels(prof.id, Array.from(byBed.keys()));
   labelsOrdered.forEach((bedLabel)=>{
     const tasks = byBed.get(bedLabel) || [];
     const group=document.createElement('div');
@@ -2459,14 +2908,14 @@ function renderWW(){
   snQuick.onclick=()=>{
     if(!wwSnippets.length){ alert('No snippets yet. Use Snippets panel to add some.'); return; }
     // Show simple chooser (reuse showMenu) with snippets
-    showInlineSnippetMenu(snQuick, bedLabel);
+    showInlineSnippetMenu(snQuick, getCurrentLabel());
   };
     const delBtn=document.createElement('button'); delBtn.textContent='delete block'; delBtn.className='delete'; delBtn.onclick=()=>{
-      const cur=getCombined();
+      const cur=getCurrentLabel();
       // Remove tasks for either original label or current combined label
-      wwTasks = wwTasks.filter(x=> !(x.date===curDate && (x.bed===bedLabel || x.bed===cur)) );
+      wwTasks = wwTasks.filter(x=> !(x.bed===cur) );
       saveWW(wwTasks); renderWW();
-      removeBlockLabel(curDate, bedLabel);
+      removeBlockLabel(prof.id, cur);
     };
   actions.appendChild(blockHandle); actions.appendChild(addBtn); actions.appendChild(snQuick); actions.appendChild(delBtn);
     header.appendChild(actions);
@@ -2484,9 +2933,9 @@ function renderWW(){
     }
   function renameGroup(oldLabel,newLabel){ 
       if(newLabel===oldLabel) return; 
-      wwTasks.forEach(t=>{ if(t.date===curDate && t.bed===oldLabel){ t.bed=newLabel; } }); 
+      wwTasks.forEach(t=>{ if(t.bed===oldLabel){ t.bed=newLabel; } }); 
       saveWW(wwTasks); 
-      replaceBlockLabel(curDate, oldLabel, newLabel); 
+      replaceBlockLabel(prof.id, oldLabel, newLabel); 
       // Update the block's label in DOM without full re-render to prevent flickering
       group.dataset.label = newLabel;
       // Only update preview, don't re-render entire view
@@ -2610,9 +3059,8 @@ function renderWW(){
       if(!wwSnippets.length){ return; }
       const items=wwSnippets.map(s=> s.text);
       showMenu(anchor, items, (val)=>{
-        const curDate=wwDate.value||''; if(!curDate) return;
         const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
-        wwTasks.push({ id:newId, date:curDate, bed: targetLabel, task: val });
+        wwTasks.push({ id:newId, bed: targetLabel, task: val });
         saveWW(wwTasks); renderWW();
         // Do not auto-focus the newly inserted task from the per-block snippets button
       });
@@ -2626,7 +3074,7 @@ function renderWW(){
       let beds=[]; if(wn){ const w=(data.wards||[]).find(x=> (x.name||'').trim()===wn); if(w) beds=(w.beds||[]).filter(b=> (b.status||'active').toLowerCase()!=='discharge').map(b=> (b.name||'').trim()); }
       if(beds.length===0){ (data.wards||[]).forEach(w=> (w.beds||[]).forEach(b=>{ if((b.status||'active').toLowerCase()==='discharge') return; beds.push((b.name||'').trim()); })); }
       beds = Array.from(new Set(beds));
-      showMenu(bedPickBtn, beds, (val)=>{ bedInp.value=val; renameGroup(bedLabel, getCombined()); });
+      showMenu(bedPickBtn, beds, (val)=>{ bedInp.value=val; renameGroup(getCurrentLabel(), getCombined()); });
     });
     const isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
     tasks.forEach(t=>{
@@ -2642,12 +3090,12 @@ function renderWW(){
     inp.addEventListener('blur', ()=> setTimeout(()=> closeSnippetSuggest(), 120));
   const dup=document.createElement('button'); dup.textContent='⧉'; dup.className='ghost'; dup.title='Duplicate'; dup.style.minWidth='36px'; dup.style.height='32px';
       dup.onclick=()=>{
-        const curDate=wwDate.value||''; const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
-        wwTasks.push({ id:newId, date:curDate, bed: bedLabel, task: t.task });
+        const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
+        wwTasks.push({ id:newId, bed: getCurrentLabel(), task: t.task });
         saveWW(wwTasks);
         // place after current
         const nextRow = row.nextElementSibling; const beforeId = nextRow && nextRow.hasAttribute('data-task-id') ? nextRow.getAttribute('data-task-id') : null;
-        if(beforeId){ reorderTasks(bedLabel, newId, beforeId); }
+        if(beforeId){ reorderTasks(getCurrentLabel(), newId, beforeId); }
         else { renderWW(); }
       };
   const del=document.createElement('button'); del.textContent='×'; del.className='ghost'; del.title='Delete'; del.style.minWidth='34px'; del.style.height='32px'; del.onclick=()=>{ wwTasks=wwTasks.filter(x=>x.id!==t.id); saveWW(wwTasks); renderWW(); };
@@ -2659,27 +3107,28 @@ function renderWW(){
         dot.addEventListener('dragend', ()=>{ row.style.opacity=''; });
         row.addEventListener('dragover', (e)=>{ e.preventDefault(); row.style.background='#eef3ff'; });
         row.addEventListener('dragleave', ()=>{ row.style.background=''; });
-        row.addEventListener('drop', (e)=>{ e.preventDefault(); row.style.background=''; const fromId=e.dataTransfer.getData('text/plain'); if(!fromId) return; const toId=t.id; const curDate=wwDate.value||''; const fromTask=wwTasks.find(x=> x.id===fromId && x.date===curDate); if(!fromTask) return;
-          const isSameBlock = fromTask.bed===bedLabel;
+        row.addEventListener('drop', (e)=>{ e.preventDefault(); row.style.background=''; const fromId=e.dataTransfer.getData('text/plain'); if(!fromId) return; const toId=t.id; const fromTask=wwTasks.find(x=> x.id===fromId); if(!fromTask) return;
+          const currentLabel = getCurrentLabel();
+          const isSameBlock = fromTask.bed===currentLabel;
           // Detect copy vs move: hold Alt/Option (or Cmd) to duplicate
           const duplicate = e.altKey || e.metaKey;
           if(duplicate){
             // Duplicate into this block before target
             const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
-            wwTasks.push({ id:newId, date:curDate, bed: bedLabel, task: fromTask.task });
+            wwTasks.push({ id:newId, bed: currentLabel, task: fromTask.task });
             saveWW(wwTasks);
-            reorderTasks(bedLabel, newId, toId);
+            reorderTasks(currentLabel, newId, toId);
             return;
           }
           if(isSameBlock){
-            if(fromId!==toId) reorderTasks(bedLabel, fromId, toId);
+            if(fromId!==toId) reorderTasks(currentLabel, fromId, toId);
           } else {
-            moveTaskAcrossBlocks(fromId, bedLabel, toId);
+            moveTaskAcrossBlocks(fromId, currentLabel, toId);
           }
         });
         // Allow dropping at end of block (below all tasks)
         listWrap.addEventListener('dragover', (e)=>{ e.preventDefault(); });
-        listWrap.addEventListener('drop', (e)=>{ const fromId=e.dataTransfer.getData('text/plain'); if(!fromId) return; const curDate=wwDate.value||''; const fromTask=wwTasks.find(x=> x.id===fromId && x.date===curDate); if(!fromTask) return; const duplicate=e.altKey||e.metaKey; if(duplicate){ const newId='ww'+Date.now()+Math.floor(Math.random()*1000); wwTasks.push({id:newId,date:curDate,bed:bedLabel,task:fromTask.task}); saveWW(wwTasks); renderWW(); return;} if(fromTask.bed!==bedLabel){ moveTaskAcrossBlocks(fromId, bedLabel, null); }});
+        listWrap.addEventListener('drop', (e)=>{ const fromId=e.dataTransfer.getData('text/plain'); if(!fromId) return; const fromTask=wwTasks.find(x=> x.id===fromId); if(!fromTask) return; const duplicate=e.altKey||e.metaKey; const currentLabel = getCurrentLabel(); if(duplicate){ const newId='ww'+Date.now()+Math.floor(Math.random()*1000); wwTasks.push({id:newId,bed:currentLabel,task:fromTask.task}); saveWW(wwTasks); renderWW(); return;} if(fromTask.bed!==currentLabel){ moveTaskAcrossBlocks(fromId, currentLabel, null); }});
       } else {
         // Mobile long-press drag on dot
         let pressTimer=null; let touchId=null; let dragState=null; const LONG_MS=350; const CANCEL_MOVE=10;
@@ -2690,7 +3139,7 @@ function renderWW(){
             // start drag
             const r=row.getBoundingClientRect();
             const ph=document.createElement('div'); ph.style.height=r.height+'px'; ph.style.border='2px dashed #5b9cff'; ph.style.borderRadius='8px'; ph.style.margin='0';
-            const container=listWrap; const sourceLabel=bedLabel; const taskId=t.id;
+            const container=listWrap; const sourceLabel=getCurrentLabel(); const taskId=t.id;
             container.insertBefore(ph, row.nextSibling);
             row.style.position='fixed'; row.style.left=r.left+'px'; row.style.top=r.top+'px'; row.style.width=r.width+'px'; row.style.zIndex='2000'; row.style.opacity='0.9'; row.style.background='#fff'; row.style.boxShadow='0 8px 24px rgba(0,0,0,0.25)'; row.style.pointerEvents='none';
             dragState={placeholder:ph,startY,startX,row,origIdx:Array.from(container.children).indexOf(row), container, sourceLabel, taskId};
@@ -2730,9 +3179,9 @@ function renderWW(){
           if(targetLabel===sourceLabel){
             // same block: reorder using container order
             const idOrder=[...container.querySelectorAll('div[data-task-id]')].map(el=> el.dataset.taskId);
-            const curDate=wwDate.value||''; const groupTasks=wwTasks.filter(x=> x.date===curDate && x.bed===sourceLabel);
+            const groupTasks=wwTasks.filter(x=> x.bed===sourceLabel);
             const sorted=groupTasks.slice().sort((a,b)=> idOrder.indexOf(a.id)-idOrder.indexOf(b.id));
-            let k=0; for(let i=0;i<wwTasks.length;i++){ if(wwTasks[i].date===curDate && wwTasks[i].bed===sourceLabel){ wwTasks[i]=sorted[k++]; } }
+            let k=0; for(let i=0;i<wwTasks.length;i++){ if(wwTasks[i].bed===sourceLabel){ wwTasks[i]=sorted[k++]; } }
             saveWW(wwTasks); renderWW();
           } else {
             moveTaskAcrossBlocks(taskId, targetLabel, beforeId);
@@ -2742,7 +3191,7 @@ function renderWW(){
         // Duplicate on double-tap of dot (mobile)
         let lastTap=0; dot.addEventListener('touchend', (e)=>{
           const now=Date.now(); if(!dragState && now-lastTap<250){
-            const curDate=wwDate.value||''; const newId='ww'+Date.now()+Math.floor(Math.random()*1000); wwTasks.push({id:newId,date:curDate,bed:bedLabel,task:t.task}); saveWW(wwTasks); renderWW(); }
+            const newId='ww'+Date.now()+Math.floor(Math.random()*1000); wwTasks.push({id:newId,bed:getCurrentLabel(),task:t.task}); saveWW(wwTasks); renderWW(); }
           lastTap=now;
         });
         function cancelDrag(){
@@ -2755,37 +3204,38 @@ function renderWW(){
     });
     group.appendChild(header); group.appendChild(listWrap); wwList.appendChild(group);
     // Drag-drop reordering for blocks
-  group.addEventListener('dragstart', (e)=>{ if(!e.target.closest('.ww-block-handle')){ e.preventDefault(); return; } e.dataTransfer.setData('text/plain', bedLabel); group.style.opacity='0.5'; });
+  group.addEventListener('dragstart', (e)=>{ if(!e.target.closest('.ww-block-handle')){ e.preventDefault(); return; } e.dataTransfer.setData('text/plain', getCurrentLabel()); group.style.opacity='0.5'; });
     group.addEventListener('dragend', ()=>{ group.style.opacity=''; group.style.borderColor='#ddd'; });
     group.addEventListener('dragover', (e)=>{ e.preventDefault(); group.style.borderColor='#5b9cff'; });
     group.addEventListener('dragleave', ()=>{ group.style.borderColor='#ddd'; });
-    group.addEventListener('drop', (e)=>{ e.preventDefault(); group.style.borderColor='#ddd'; const from=e.dataTransfer.getData('text/plain'); const to=bedLabel; if(!from||from===to) return; moveBlock(curDate, from, to); renderWW(); });
+    group.addEventListener('drop', (e)=>{ e.preventDefault(); group.style.borderColor='#ddd'; const from=e.dataTransfer.getData('text/plain'); const to=getCurrentLabel(); if(!from||from===to) return; const prof=getCurrentWWProfile(); moveBlock(prof.id, from, to); renderWW(); });
   // Mobile long-press drag support (use dedicated handle)
-  enableMobileBlockDrag(blockHandle, group, bedLabel, curDate);
+  enableMobileBlockDrag(blockHandle, group, getCurrentLabel(), prof.id);
   });
   updateWWPreview();
 }
 
 // Create empty block (no auto extra blank rows)
 wwAddBlock?.addEventListener('click', ()=>{
-  const date=wwDate.value||''; if(!date) return;
+  const prof = getCurrentWWProfile();
+  if(!prof) return;
   const tempLabel = '(new) ' + (Date.now()%1e7) + '-' + Math.floor(Math.random()*1000);
-  wwTasks.push({ id:'ww'+Date.now()+Math.floor(Math.random()*1000), date, bed: tempLabel, task:'' });
+  wwTasks.push({ id:'ww'+Date.now()+Math.floor(Math.random()*1000), bed: tempLabel, task:'' });
   saveWW(wwTasks); renderWW();
-  appendBlockIfMissing(date, tempLabel);
+  appendBlockIfMissing(prof.id, tempLabel);
   // focus newly created ward input after render
   setTimeout(()=>{ const blocks=[...wwList.querySelectorAll('.ww-block')]; const last=blocks[blocks.length-1]; const w=last?.querySelector('.wwWard'); w?.focus(); }, 50);
 });
 
 // --- Mobile block drag (long press) ---
-let mbDragState=null; // {el,label,date,startY,offsetY,placeholder}
-function enableMobileBlockDrag(handleEl, dragEl, label, date){
+let mbDragState=null; // {el,label,profileId,startY,offsetY,placeholder}
+function enableMobileBlockDrag(handleEl, dragEl, label, profileId){
   const LONG_PRESS_MS=350;
   let pressTimer=null; let touchId=null;
   function clearTimer(){ if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; } }
   handleEl.addEventListener('touchstart', (e)=>{
     if(e.touches.length!==1) return; touchId=e.touches[0].identifier; const startY=e.touches[0].clientY;
-    pressTimer=setTimeout(()=>{ startMobileDrag(dragEl,label,date,startY); }, LONG_PRESS_MS);
+    pressTimer=setTimeout(()=>{ startMobileDrag(dragEl,label,profileId,startY); }, LONG_PRESS_MS);
   }, {passive:true});
   handleEl.addEventListener('touchmove', (e)=>{
     if(pressTimer && e.touches.length===1){
@@ -2802,14 +3252,14 @@ function enableMobileBlockDrag(handleEl, dragEl, label, date){
   });
   handleEl.addEventListener('touchcancel', ()=>{ clearTimer(); if(mbDragState){ cancelMobileDrag(); } });
 }
-function startMobileDrag(el,label,date,startY){
+function startMobileDrag(el,label,profileId,startY){
   const rect=el.getBoundingClientRect();
   const ph=document.createElement('div');
   ph.className='ww-block-placeholder';
   ph.style.height=rect.height+'px'; ph.style.border='2px dashed #5b9cff'; ph.style.borderRadius='10px'; ph.style.margin='0';
   el.parentElement.insertBefore(ph, el.nextSibling);
   el.style.position='fixed'; el.style.left=rect.left+'px'; el.style.top=rect.top+'px'; el.style.width=rect.width+'px'; el.style.zIndex='2000'; el.style.opacity='0.9'; el.style.boxShadow='0 10px 30px rgba(0,0,0,0.25)';
-  mbDragState={el,label,date,startY,offsetY:0,placeholder:ph,origIndex:Array.from(wwList.children).indexOf(el)};
+  mbDragState={el,label,profileId,startY,offsetY:0,placeholder:ph,origIndex:Array.from(wwList.children).indexOf(el)};
   document.body.style.userSelect='none';
 }
 function moveMobileDrag(currentY){
@@ -2823,7 +3273,7 @@ function moveMobileDrag(currentY){
   else { wwList.insertBefore(mbDragState.placeholder, wwList.firstChild); }
 }
 function finishMobileDrag(){
-  const {el,label,date,placeholder}=mbDragState; el.style.position=''; el.style.left=''; el.style.top=''; el.style.width=''; el.style.zIndex=''; el.style.opacity=''; el.style.boxShadow=''; el.style.transform='';
+  const {el,label,profileId,placeholder}=mbDragState; el.style.position=''; el.style.left=''; el.style.top=''; el.style.width=''; el.style.zIndex=''; el.style.opacity=''; el.style.boxShadow=''; el.style.transform='';
   document.body.style.userSelect='';
   const siblings=[...wwList.querySelectorAll('.ww-block')].filter(b=> b!==el);
   const newIndex=[...wwList.children].indexOf(placeholder);
@@ -2831,7 +3281,7 @@ function finishMobileDrag(){
   const order=siblings.map(b=> b.dataset.label);
   // Insert dragged label at newIndex relative to other labels
   order.splice(newIndex,0,label);
-  saveBlockOrder(date, order);
+  saveBlockOrder(profileId, order);
   mbDragState=null; renderWW();
 }
 function cancelMobileDrag(){
@@ -2841,9 +3291,9 @@ function cancelMobileDrag(){
 }
 
 function addEmptyTask(bedLabel, focus=false){
-  const curDate=wwDate.value||''; if(!bedLabel) return;
+  if(!bedLabel) return;
   const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
-  wwTasks.push({ id:newId, date:curDate, bed: bedLabel, task:'' });
+  wwTasks.push({ id:newId, bed: bedLabel, task:'' });
   saveWW(wwTasks); renderWW();
   if(focus){
     setTimeout(()=>{
@@ -2855,9 +3305,8 @@ function addEmptyTask(bedLabel, focus=false){
 }
 
 function reorderTasks(bedLabel, fromId, toId){
-  const curDate=wwDate.value||'';
   const indices=[]; const groupTasks=[];
-  wwTasks.forEach((t,i)=>{ if(t.date===curDate && t.bed===bedLabel){ indices.push(i); groupTasks.push(t); } });
+  wwTasks.forEach((t,i)=>{ if(t.bed===bedLabel){ indices.push(i); groupTasks.push(t); } });
   const orderIds=groupTasks.map(t=>t.id);
   const fromIdx=orderIds.indexOf(fromId); const toIdx=orderIds.indexOf(toId);
   if(fromIdx<0||toIdx<0) return;
@@ -2871,8 +3320,7 @@ function reorderTasks(bedLabel, fromId, toId){
 
 // Move a task to a different block (bedLabel) optionally before another task id (beforeId); if beforeId null append
 function moveTaskAcrossBlocks(taskId, targetBedLabel, beforeId){
-  const curDate=wwDate.value||'';
-  const task=wwTasks.find(t=> t.id===taskId && t.date===curDate);
+  const task=wwTasks.find(t=> t.id===taskId);
   if(!task || !targetBedLabel) return;
   const originalBed=task.bed;
   if(originalBed===targetBedLabel){
@@ -2880,29 +3328,29 @@ function moveTaskAcrossBlocks(taskId, targetBedLabel, beforeId){
     if(beforeId){ reorderTasks(targetBedLabel, taskId, beforeId); return; }
     // append: remove then push to end
     const groupIndices=[]; const groupTasks=[];
-    wwTasks.forEach((t,i)=>{ if(t.date===curDate && t.bed===targetBedLabel){ groupIndices.push(i); groupTasks.push(t); } });
+    wwTasks.forEach((t,i)=>{ if(t.bed===targetBedLabel){ groupIndices.push(i); groupTasks.push(t); } });
     const idx=groupTasks.findIndex(t=> t.id===taskId); if(idx<0) return;
     const [mv]=groupTasks.splice(idx,1); groupTasks.push(mv);
     for(let j=0;j<groupIndices.length;j++){ wwTasks[groupIndices[j]] = groupTasks[j]; }
     saveWW(wwTasks); renderWW(); return;
   }
   // Different block: rebuild order for both affected blocks preserving overall sequence
-  const dateTasks=wwTasks.filter(t=> t.date===curDate);
   task.bed=targetBedLabel; // assign new block label
   // Build mapping of tasks by bed in desired order (keep existing order of wwTasks array except for task reposition)
   const byBed=new Map();
-  dateTasks.forEach(t=>{ if(!byBed.has(t.bed)) byBed.set(t.bed, []); if(t.id!==taskId) byBed.get(t.bed).push(t); });
+  wwTasks.forEach(t=>{ if(!byBed.has(t.bed)) byBed.set(t.bed, []); if(t.id!==taskId) byBed.get(t.bed).push(t); });
   // Insert moved task into target bed tasks at position
   const targetArr=byBed.get(targetBedLabel) || []; if(beforeId){
     const pos=targetArr.findIndex(x=> x.id===beforeId); const insertPos= pos>=0? pos : targetArr.length; targetArr.splice(insertPos,0, task);
   } else targetArr.push(task);
   byBed.set(targetBedLabel, targetArr);
-  // Reconstruct wwTasks for this date following saved block ordering
-  const orderLabels=getOrderedLabels(curDate, Array.from(byBed.keys()));
+  // Reconstruct wwTasks following saved block ordering
+  const prof = getCurrentWWProfile();
+  const orderLabels=getOrderedLabels(prof.id, Array.from(byBed.keys()));
   const rebuilt=[];
   orderLabels.forEach(lbl=>{ const arr=byBed.get(lbl)||[]; arr.forEach(t=> rebuilt.push(t)); });
-  // Write back into wwTasks maintaining other dates unaffected
-  let k=0; for(let i=0;i<wwTasks.length;i++){ if(wwTasks[i].date===curDate){ wwTasks[i]=rebuilt[k++]; } }
+  // Replace wwTasks entirely
+  wwTasks = rebuilt;
   saveWW(wwTasks); renderWW();
 }
 
@@ -2953,16 +3401,15 @@ try{ const open=localStorage.getItem(WW_MOBILE_OPEN_KEY); if(open==='true') wwOp
 
 // Persist title and live-update preview
 wwTitle?.addEventListener('input', ()=>{
-  // Allow user to type anywhere; keep the exact string they enter, but persist immediately
-  try{ localStorage.setItem('ww-title', wwTitle.value||''); }catch{}
+  const prof = getCurrentWWProfile();
+  if(prof){
+    prof.title = wwTitle.value || '';
+    saveWWProfiles();
+  }
   updateWWPreview();
 });
 
-// Re-render when date changes
-wwDate?.addEventListener('change', ()=>{
-  ensureDecoratedTitleForDate();
-  renderWW();
-});
+// Re-render when switching profiles (removed date change handler)
 
 // Preview show/hide toggle (persisted)
 const wwPreviewSection=document.getElementById('wwPreviewSection');
