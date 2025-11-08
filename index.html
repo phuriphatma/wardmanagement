@@ -2211,6 +2211,8 @@ const WW_SNIPPETS_KEY='ww-snippets-v1';
 function loadWWSnippets(){ try{ return JSON.parse(localStorage.getItem(WW_SNIPPETS_KEY)||'[]'); }catch{ return []; } }
 function saveWWSnippets(arr){ try{ localStorage.setItem(WW_SNIPPETS_KEY, JSON.stringify(arr||[])); }catch{} }
 let wwSnippets=loadWWSnippets(); // array of { id, text }
+// Internal separator for storing ward and bed together without interfering with user-entered '/'
+const WW_BLOCK_SEP='\u001F';
 
 // Block ordering persistence per date
 const WW_BLOCK_ORDER_PREFIX='ww-block-order-v1:';
@@ -2351,7 +2353,17 @@ function updateWWPreview(){
   const fallback = (()=>{ const t='WW'; const dt=wwFormatDDMMYY(curDate); return dt? `🔆 ${t} ${dt} 🔆` : `🔆 ${t} 🔆`; })();
   const lines=[decoratedTitle || fallback,''];
   Array.from(groups.entries()).forEach(([bed,tasks])=>{
-    lines.push(bed);
+    let display=bed;
+    if(typeof bed==='string' && bed.includes(WW_BLOCK_SEP)){
+      const [w,b]=bed.split(WW_BLOCK_SEP);
+      if(b){
+        const sep = (w||'').includes('/') ? ' ' : '/';
+        display = `${w}${sep}${b}`;
+      } else {
+        display = w;
+      }
+    }
+    lines.push(display);
     tasks.forEach(tsk=> lines.push('⭕️ '+tsk));
     lines.push('');
   });
@@ -2425,11 +2437,18 @@ function renderWW(){
   // picker buttons
   const wardPickBtn=document.createElement('button'); wardPickBtn.textContent='▾'; wardPickBtn.className='ghost'; wardPickBtn.title='Pick ward'; wardPickBtn.style.minWidth='36px'; wardPickBtn.style.height='36px';
   const bedPickBtn=document.createElement('button'); bedPickBtn.textContent='▾'; bedPickBtn.className='ghost'; bedPickBtn.title='Pick bed'; bedPickBtn.style.minWidth='36px'; bedPickBtn.style.height='36px';
-    // prefill if label contains '/'
+    // Prefill ward/bed inputs using last-slash split.
+    // Example: "กว6/1/9 บุญล้อม" -> ward "กว6/1", bed "9 บุญล้อม".
     if(!bedLabel || bedLabel.startsWith('(new) ') ){
       wardInp.value=''; bedInp.value='';
-    } else if((bedLabel||'').includes('/')){ const [w,b]=bedLabel.split(/\s*\/\s*/,2); wardInp.value=w||''; bedInp.value=b||''; }
-    else { wardInp.value=bedLabel||''; bedInp.value=''; }
+    } else if((bedLabel||'').includes(WW_BLOCK_SEP)){
+      const [wPart,bPart]=(bedLabel||'').split(WW_BLOCK_SEP);
+      wardInp.value=(wPart||'').trim();
+      bedInp.value=(bPart||'').trim();
+    } else {
+      // No internal separator -> treat the whole label as ward text, leave bed empty
+      wardInp.value=bedLabel||''; bedInp.value='';
+    }
   const addBtn=document.createElement('button'); addBtn.textContent='add task'; addBtn.className='ghost'; addBtn.onclick=()=>{ addEmptyTask(getCombined(), true); };
   // Quick snippet insertion button inside block for convenience
   const snQuick=document.createElement('button'); snQuick.textContent='⧉+'; snQuick.className='ghost'; snQuick.title='Insert snippet';
@@ -2453,10 +2472,26 @@ function renderWW(){
     header.appendChild(wbWrap);
     header.appendChild(bedList);
   const listWrap=document.createElement('div'); listWrap.style.display='grid'; listWrap.style.gap='6px'; listWrap.setAttribute('data-listwrap','1');
-    function getCombined(){ const w=wardInp.value.trim(); const b=bedInp.value.trim(); if(w&&b) return `${w}/${b}`; return (w||b)||''; }
-  function renameGroup(oldLabel,newLabel){ if(newLabel===oldLabel) return; wwTasks.forEach(t=>{ if(t.date===curDate && t.bed===oldLabel){ t.bed=newLabel; } }); saveWW(wwTasks); replaceBlockLabel(curDate, oldLabel, newLabel); renderWW(); }
-    wardInp.addEventListener('change', ()=> renameGroup(bedLabel, getCombined()));
-    bedInp.addEventListener('change', ()=> renameGroup(bedLabel, getCombined()));
+    function getCombined(){
+      const w=wardInp.value.trim();
+      const b=bedInp.value.trim();
+      if(w&&b) return w + WW_BLOCK_SEP + b;
+      return (w||b)||'';
+    }
+  function renameGroup(oldLabel,newLabel){ 
+      if(newLabel===oldLabel) return; 
+      wwTasks.forEach(t=>{ if(t.date===curDate && t.bed===oldLabel){ t.bed=newLabel; } }); 
+      saveWW(wwTasks); 
+      replaceBlockLabel(curDate, oldLabel, newLabel); 
+      // Update the block's label in DOM without full re-render to prevent flickering
+      group.dataset.label = newLabel;
+      // Only update preview, don't re-render entire view
+      updateWWPreview();
+    }
+    // Use a function to get current label from DOM to handle multiple sequential changes
+    const getCurrentLabel = () => group.dataset.label || bedLabel;
+    wardInp.addEventListener('change', ()=> renameGroup(getCurrentLabel(), getCombined()));
+    bedInp.addEventListener('change', ()=> renameGroup(getCurrentLabel(), getCombined()));
     // Build initial bed list and refresh suggestions when ward changes
     const rebuildBedList=()=>{
       bedList.innerHTML='';
@@ -2487,7 +2522,7 @@ function renderWW(){
     setTimeout(fitWard, 0);
     wardInp.addEventListener('input', fitWard);
     // Refit on picker selections
-    const refitAndRename=()=>{ renameGroup(bedLabel, getCombined()); fitWard(); };
+    const refitAndRename=()=>{ renameGroup(getCurrentLabel(), getCombined()); fitWard(); };
     
     wardInp.addEventListener('input', ()=>{ rebuildBedList(); });
 
@@ -2533,8 +2568,10 @@ function renderWW(){
     }
     function showSnippetSuggest(anchor, query, onPick){
       const q=(query||'').trim().toLowerCase();
-      const items=(wwSnippets||[]).map(s=>s.text).filter(t=> t.toLowerCase().includes(q)).slice(0,8);
-      if(!q || items.length===0){ closeSnippetSuggest(); return; }
+      const all=(wwSnippets||[]).map(s=>s.text);
+      const items = q ? all.filter(t=> t.toLowerCase().includes(q)).slice(0,8)
+                      : all.slice(0,8);
+      if(items.length===0){ closeSnippetSuggest(); return; }
       if(wwSuggMenu){ closeSnippetSuggest(); }
       const menu=document.createElement('div'); wwSuggMenu=menu;
       menu.style.position='fixed'; menu.style.background='#fff'; menu.style.border='1px solid #ddd'; menu.style.borderRadius='8px'; menu.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)';
@@ -2595,8 +2632,10 @@ function renderWW(){
   const autoresize=()=>{ inp.style.height='auto'; inp.style.height = (inp.scrollHeight)+'px'; };
   setTimeout(autoresize, 0);
   inp.addEventListener('input', ()=>{ const rec=wwTasks.find(x=>x.id===t.id); if(rec){ rec.task=inp.value; saveWW(wwTasks); updateWWPreview(); } autoresize(); showSnippetSuggest(inp, inp.value, (val)=>{ inp.value=val; autoresize(); const rec=wwTasks.find(x=>x.id===t.id); if(rec){ rec.task=inp.value; saveWW(wwTasks); updateWWPreview(); } }); });
+    // show suggestions on focus as well (helpful on mobile)
+    inp.addEventListener('focus', ()=>{ showSnippetSuggest(inp, inp.value, (val)=>{ inp.value=val; autoresize(); const rec=wwTasks.find(x=>x.id===t.id); if(rec){ rec.task=inp.value; saveWW(wwTasks); updateWWPreview(); } }); });
       // hide suggestions on blur (allow time for click)
-      inp.addEventListener('blur', ()=> setTimeout(()=> closeSnippetSuggest(), 120));
+    inp.addEventListener('blur', ()=> setTimeout(()=> closeSnippetSuggest(), 120));
   const dup=document.createElement('button'); dup.textContent='⧉'; dup.className='ghost'; dup.title='Duplicate'; dup.style.minWidth='36px'; dup.style.height='32px';
       dup.onclick=()=>{
         const curDate=wwDate.value||''; const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
