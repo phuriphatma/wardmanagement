@@ -356,6 +356,7 @@ body.collapsed #expandSidebarBtn{display:none}
           </label>
         </div>
         <datalist id="wwWardListGlobal"></datalist>
+        <datalist id="wwSnipDatalist"></datalist>
       </section>
       <section class="card" style="max-width:720px;">
         <!-- Tasks heading removed per request -->
@@ -2212,6 +2213,29 @@ function loadWWSnippets(){ try{ return JSON.parse(localStorage.getItem(WW_SNIPPE
 function saveWWSnippets(arr){ try{ localStorage.setItem(WW_SNIPPETS_KEY, JSON.stringify(arr||[])); }catch{} }
 let wwSnippets=loadWWSnippets(); // array of { id, text }
 
+// Build snippet datalist from wwSnippets
+function buildWWSnippetDatalist() {
+  const dl = document.getElementById('wwSnipDatalist');
+  if (!dl) return;
+  dl.innerHTML = '';
+  (wwSnippets || []).forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.text || '';
+    dl.appendChild(opt);
+  });
+}
+
+// Ensure all task inputs use snippet suggestions (and not ward/bed suggestions)
+function retargetTaskInputsToSnippets(root = wwList) {
+  if (!root) return;
+  root.querySelectorAll('textarea.wwTask').forEach(inp => {
+    // Clear any wrong datalist from templates (e.g., ward list)
+    inp.removeAttribute('list');
+    // Point to snippet list
+    inp.setAttribute('list', 'wwSnipDatalist');
+  });
+}
+
 // Block ordering persistence per date
 const WW_BLOCK_ORDER_PREFIX='ww-block-order-v1:';
 function loadBlockOrder(dateStr){
@@ -2261,6 +2285,7 @@ function openWardWork(){
   try{ const saved=localStorage.getItem('ww-title'); if(saved && wwTitle){ wwTitle.value=saved; } }catch{}
   ensureDecoratedTitleForDate();
   refreshWWSuggestions();
+  buildWWSnippetDatalist(); // build snippet datalist
   buildWWSnippetsUI(); // ensure modal list is ready
   renderWW();
 }
@@ -2364,8 +2389,8 @@ function buildWWSnippetsUI(){
   wwSnipListEl.innerHTML='';
   wwSnippets.forEach(sn=>{
     const row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='1fr auto'; row.style.gap='8px'; row.style.alignItems='center';
-    const inp=document.createElement('input'); inp.type='text'; inp.value=sn.text; inp.style.padding='8px'; inp.addEventListener('input', ()=>{ sn.text=inp.value; saveWWSnippets(wwSnippets); });
-    const del=document.createElement('button'); del.textContent='×'; del.className='ghost'; del.title='Delete'; del.onclick=()=>{ wwSnippets=wwSnippets.filter(x=>x.id!==sn.id); saveWWSnippets(wwSnippets); buildWWSnippetsUI(); };
+    const inp=document.createElement('input'); inp.type='text'; inp.value=sn.text; inp.style.padding='8px'; inp.addEventListener('input', ()=>{ sn.text=inp.value; saveWWSnippets(wwSnippets); buildWWSnippetDatalist(); });
+    const del=document.createElement('button'); del.textContent='×'; del.className='ghost'; del.title='Delete'; del.onclick=()=>{ wwSnippets=wwSnippets.filter(x=>x.id!==sn.id); saveWWSnippets(wwSnippets); buildWWSnippetDatalist(); buildWWSnippetsUI(); };
     row.appendChild(inp); row.appendChild(del); wwSnipListEl.appendChild(row);
   });
 }
@@ -2374,7 +2399,7 @@ function closeWWSnippetModal(){ if(!wwSnipModal) return; wwSnipModal.style.displ
 wwSnipToggle?.addEventListener('click', openWWSnippetModal);
 wwSnipCloseBtn?.addEventListener('click', closeWWSnippetModal);
 wwSnipModal?.addEventListener('click', (e)=>{ if(e.target===wwSnipModal) closeWWSnippetModal(); });
-wwSnipAddBtn?.addEventListener('click', ()=>{ const v=(wwSnipNewInput?.value||'').trim(); if(!v) return; wwSnippets.push({ id:'sn'+Date.now()+Math.floor(Math.random()*1000), text:v }); saveWWSnippets(wwSnippets); wwSnipNewInput.value=''; buildWWSnippetsUI(); });
+wwSnipAddBtn?.addEventListener('click', ()=>{ const v=(wwSnipNewInput?.value||'').trim(); if(!v) return; wwSnippets.push({ id:'sn'+Date.now()+Math.floor(Math.random()*1000), text:v }); saveWWSnippets(wwSnippets); buildWWSnippetDatalist(); wwSnipNewInput.value=''; buildWWSnippetsUI(); });
 wwSnipNewInput?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); wwSnipAddBtn?.click(); } });
 // Insert snippet into current block (focus-first non-empty or create new block if none)
 function quickInsertSnippet(text){
@@ -2591,7 +2616,7 @@ function renderWW(){
     tasks.forEach(t=>{
   const row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='auto 1fr auto auto'; row.style.gap='6px'; row.style.alignItems='center'; row.dataset.taskId=t.id;
       const dot=document.createElement('span'); dot.textContent='⭕️'; dot.setAttribute('aria-hidden','true'); dot.style.opacity='0.9'; dot.className='ww-task-handle';
-  const inp=document.createElement('textarea'); inp.rows=1; inp.value=t.task; inp.style.width='100%'; inp.style.resize='vertical'; inp.dataset.id=t.id; inp.style.fontSize='15px'; inp.style.lineHeight='1.3'; inp.style.minHeight='34px'; inp.style.padding='6px 8px'; inp.style.minWidth='0';
+  const inp=document.createElement('textarea'); inp.rows=1; inp.value=t.task; inp.style.width='100%'; inp.style.resize='vertical'; inp.dataset.id=t.id; inp.className='wwTask'; inp.setAttribute('list', 'wwSnipDatalist'); inp.style.fontSize='15px'; inp.style.lineHeight='1.3'; inp.style.minHeight='34px'; inp.style.padding='6px 8px'; inp.style.minWidth='0';
   const autoresize=()=>{ inp.style.height='auto'; inp.style.height = (inp.scrollHeight)+'px'; };
   setTimeout(autoresize, 0);
   inp.addEventListener('input', ()=>{ const rec=wwTasks.find(x=>x.id===t.id); if(rec){ rec.task=inp.value; saveWW(wwTasks); updateWWPreview(); } autoresize(); showSnippetSuggest(inp, inp.value, (val)=>{ inp.value=val; autoresize(); const rec=wwTasks.find(x=>x.id===t.id); if(rec){ rec.task=inp.value; saveWW(wwTasks); updateWWPreview(); } }); });
@@ -2721,6 +2746,7 @@ function renderWW(){
   enableMobileBlockDrag(blockHandle, group, bedLabel, curDate);
   });
   updateWWPreview();
+  retargetTaskInputsToSnippets(); // ensure task inputs use snippet datalist
 }
 
 // Create empty block (no auto extra blank rows)
