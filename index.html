@@ -490,7 +490,7 @@ body.collapsed #expandSidebarBtn{display:none}
             </div>
             <div class="row">
               <label>HN
-                <input id="hn" inputmode="numeric" placeholder="e.g., 1234567" />
+                <input id="hn" placeholder="e.g., 1234567" />
               </label>
             </div>
             <div class="row">
@@ -519,11 +519,11 @@ body.collapsed #expandSidebarBtn{display:none}
           <section class="card">
             <h2>V/S</h2>
             <div class="grid vs">
-              <label>BT <input id="bt" inputmode="decimal" placeholder="36.9" /></label>
-              <label>PR <input id="pr" inputmode="numeric" placeholder="74" /></label>
-              <label>RR <input id="rr" inputmode="numeric" placeholder="18" /></label>
+              <label>BT <input id="bt" placeholder="36.9" /></label>
+              <label>PR <input id="pr" placeholder="74" /></label>
+              <label>RR <input id="rr" placeholder="18" /></label>
               <label>BP <input id="bp" placeholder="143/75" /></label>
-              <label>O2sat <input id="o2" inputmode="numeric" placeholder="96%" /></label>
+              <label>O2sat <input id="o2" placeholder="96%" /></label>
             </div>
           </section>
 
@@ -537,8 +537,8 @@ body.collapsed #expandSidebarBtn{display:none}
               <div class="override">
                 <div class="tag">Override totals (optional)</div>
                 <div class="row">
-                  <label>I <input class="override-in" inputmode="decimal" placeholder="e.g., 1960" /></label>
-                  <label>O <input class="override-out" inputmode="decimal" placeholder="e.g., 1300" /></label>
+                  <label>I <input class="override-in" placeholder="e.g., 1960" /></label>
+                  <label>O <input class="override-out" placeholder="e.g., 1300" /></label>
                 </div>
               </div>
               <div class="totals">Total: <span class="sum-in">0</span>/<span class="sum-out">0</span> (<span class="net">0</span>)</div>
@@ -555,8 +555,8 @@ body.collapsed #expandSidebarBtn{display:none}
               <div class="override">
                 <div class="tag">Override totals (optional)</div>
                 <div class="row">
-                  <label>I <input class="override-in" inputmode="decimal" placeholder="e.g., 1242" /></label>
-                  <label>O <input class="override-out" inputmode="decimal" placeholder="e.g., 1180" /></label>
+                  <label>I <input class="override-in" placeholder="e.g., 1242" /></label>
+                  <label>O <input class="override-out" placeholder="e.g., 1180" /></label>
                 </div>
               </div>
               <div class="totals">Total: <span class="sum-in">0</span>/<span class="sum-out">0</span> (<span class="net">0</span>)</div>
@@ -1914,14 +1914,29 @@ const notifyEditor=(function(){
     const line=el('div',{class:'io-line'});
     const kindInput=el('input',{class:'kind',placeholder:kind==='in'?'oral / ivf / นม / ...':'urine / drain / ...'});
     const displayInput=el('input',{class:'display',placeholder:'e.g., 500+ท1'});
-    const amount=el('input',{class:'amount',inputmode:'decimal',placeholder:'500'});
+    const amount=el('input',{class:'amount',placeholder:'500'});
     const rm=el('button',{class:'remove',onclick:()=>{ line.remove(); recalc(container.closest('.io-block')); if(changeCb) changeCb(); }},'×');
     line.append(kindInput,displayInput,amount,rm);
     container.appendChild(line);
+    
+    // Auto-fill amount from display if display is just a number
+    displayInput.addEventListener('input',()=>{ 
+      const val = displayInput.value.trim();
+      // Check if the value is purely numeric (optionally with decimal point)
+      if(val && /^\d+(\.\d+)?$/.test(val)) {
+        amount.value = val;
+      } else {
+        // If it contains text/symbols, clear the amount box
+        amount.value = '';
+      }
+      updatePreview(); 
+      if(changeCb) changeCb(); 
+      recalc(container.closest('.io-block'));
+    });
+    
     // Any change in IO should autosave
     amount.addEventListener('input',()=>{ recalc(container.closest('.io-block')); if(changeCb) changeCb(); });
     kindInput.addEventListener('input',()=>{ updatePreview(); if(changeCb) changeCb(); });
-    displayInput.addEventListener('input',()=>{ updatePreview(); if(changeCb) changeCb(); });
   }
   function gatherIO(blockEl){
     const read=cls=>Array.from(blockEl.querySelectorAll(`.lines.${cls} .io-line`)).map(line=>({
@@ -2445,8 +2460,13 @@ function saveBlockOrder(profileId, arr){
 }
 function getOrderedLabels(profileId, labels){
   const existing=loadBlockOrder(profileId);
-  // keep only labels that still exist
-  let order=existing.filter(x=> labels.includes(x));
+  // keep only labels that still exist, and remove duplicates
+  let order=[];
+  existing.forEach(x => {
+    if(labels.includes(x) && !order.includes(x)) {
+      order.push(x);
+    }
+  });
   // append any new labels not in order yet
   labels.forEach(l=>{ if(!order.includes(l)) order.push(l); });
   return order;
@@ -2912,8 +2932,9 @@ function renderWW(){
   };
     const delBtn=document.createElement('button'); delBtn.textContent='delete block'; delBtn.className='delete'; delBtn.onclick=()=>{
       const cur=getCurrentLabel();
-      // Remove tasks for either original label or current combined label
-      wwTasks = wwTasks.filter(x=> !(x.bed===cur) );
+      // Only delete the tasks that are currently in this block
+      const taskIdsInBlock = tasks.map(t => t.id);
+      wwTasks = wwTasks.filter(x=> !taskIdsInBlock.includes(x.id) );
       saveWW(wwTasks); renderWW();
       removeBlockLabel(prof.id, cur);
     };
@@ -2929,7 +2950,12 @@ function renderWW(){
       const w=wardInp.value.trim();
       const b=bedInp.value.trim();
       if(w&&b) return w + WW_BLOCK_SEP + b;
-      return (w||b)||'';
+      const combined = (w||b)||'';
+      // If completely empty and this block has a (new) label, keep the unique label
+      if(!combined && bedLabel && bedLabel.startsWith('(new) ')) {
+        return bedLabel;
+      }
+      return combined;
     }
   function renameGroup(oldLabel,newLabel){ 
       if(newLabel===oldLabel) return; 
@@ -3291,13 +3317,14 @@ function cancelMobileDrag(){
 }
 
 function addEmptyTask(bedLabel, focus=false){
-  if(!bedLabel) return;
+  // Allow empty bedLabel - tasks can exist without ward/bed
+  const label = bedLabel || '';
   const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
-  wwTasks.push({ id:newId, bed: bedLabel, task:'' });
+  wwTasks.push({ id:newId, bed: label, task:'' });
   saveWW(wwTasks); renderWW();
   if(focus){
     setTimeout(()=>{
-      const block=[...wwList.querySelectorAll('.ww-block')].find(b=> b.dataset.label===bedLabel);
+      const block=[...wwList.querySelectorAll('.ww-block')].find(b=> b.dataset.label===label);
       const ta=block?.querySelector(`textarea[data-id="${newId}"]`) || block?.querySelector('textarea[data-id]:last-of-type');
       if(ta){ ta.focus(); ta.selectionStart=ta.selectionEnd=ta.value.length; }
     },60);
