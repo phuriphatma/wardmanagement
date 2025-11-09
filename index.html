@@ -32,7 +32,7 @@ border-bottom:1px solid #ddd;cursor:pointer}
 #wardList{list-style:none;margin:0;padding:0}
 #wardList li{padding:6px;margin:4px 0;border-radius:4px;cursor:pointer;user-select:none;border:1px solid transparent}
 #wardList li.selected{background:#def}
-#wardList li.over{border:1px dashed #000; background: rgba(0,123,255,0.06)}
+#wardList li.over{border:2px solid #007bff; background: rgba(0,123,255,0.15); box-shadow: inset 4px 0 0 #007bff, 0 0 8px rgba(0,123,255,0.3);}
 #wardList li{position:relative}
 #wardList li .ward-delete{position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;pointer-events:none;transition:opacity .15s;background:#fee;color:#900;border:1px solid #c00;border-radius:3px;padding:2px 6px;font-size:12px;line-height:1}
 body.edit-wards #wardList li .ward-delete{opacity:1;pointer-events:auto}
@@ -48,7 +48,7 @@ body.edit-wards #wardList li .ward-delete{opacity:1;pointer-events:auto}
 /* Main area */
 #main{flex:1;display:flex;flex-direction:row;overflow:hidden}
 #bedContainer{flex:1;padding:10px;overflow-y:auto;scroll-behavior:smooth;border-right:1px solid #eee}
-#bedList .bed-item{display:flex;flex-direction:row;align-items:center;gap:8px;border-bottom:1px solid #eee;padding:8px 0;cursor:grab}
+#bedList .bed-item{display:flex;flex-direction:row;align-items:center;gap:8px;border-bottom:1px solid #eee;padding:8px 0;cursor:grab;touch-action:pan-y;-webkit-user-select:none;user-select:none}
 #bedList .bed-item.over{border-top:3px solid #007bff;padding-top:5px}
 #bedList .bed-text{flex:1;display:flex;flex-direction:column;gap:4px}
 #bedList .bed-text .line1{font-weight:600;font-size:16px}
@@ -461,12 +461,9 @@ body.collapsed #expandSidebarBtn{display:none}
     <div id="sidebarHeader">
       <button id="addWardBtn">+ Add Ward</button>
       <button id="editWardsBtn">Edit Wards</button>
-      <button id="presetsBtn">Presets</button>
-  <button id="wardWorkBtn">WardWork</button>
-  <button id="notesBtn">Notes</button>
       <!-- Compact Profiles control -->
-      <div id="profilesMenu" style="position:relative; margin-left:auto;">
-        <button id="profileMenuBtn" class="ghost" style="border:1px solid #ddd; padding:6px 10px; border-radius:6px;">Profile</button>
+      <div id="profilesMenu" style="position:relative;">
+        <button id="profileMenuBtn" class="ghost" style="width:100%;border:1px solid #ddd; padding:12px; border-radius:0; font-size:18px; background:#fff; border-bottom:1px solid #ddd;">Profile</button>
         <div id="profileMenuPanel" style="display:none; position:absolute; right:0; top:100%; margin-top:6px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,0.1); width:280px; max-height:60vh; overflow:auto; z-index:50;">
           <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #eee;">
             <strong>Profiles</strong>
@@ -483,6 +480,9 @@ body.collapsed #expandSidebarBtn{display:none}
           </div>
         </div>
       </div>
+      <button id="presetsBtn">Presets</button>
+  <button id="wardWorkBtn">WardWork</button>
+  <button id="notesBtn">Notes</button>
     </div>
     <div id="wardListContainer">
       <div id="wardListPrefs" style="display:flex; align-items:center; gap:8px; padding:6px 6px 0; font-size:12px; color:#555;">
@@ -1087,6 +1087,7 @@ function renderWards(){
   // Green if has beds by current filter, red if none
   const hasBeds = count > 0;
   li.style.boxShadow = `inset 4px 0 0 ${hasBeds ? '#3ecf8e' : '#ff6b6b'}`;
+    li.dataset.wardId = w.id; // Add ward ID for mobile drag-and-drop
     if(w.id===selectedWardId)li.classList.add('selected');
     li.onclick=()=>{
       selectedWardId=w.id;selectedBedId=null;renderWards();renderBeds();
@@ -1231,7 +1232,11 @@ function renderBeds(){
       lpStart={x:t.clientX, y:t.clientY};
       const bedIds=(selectedBedIds.size>0 && selectedBedIds.has(b.id))? Array.from(selectedBedIds): [b.id];
       clearTimeout(longPressTimer);
-      longPressTimer=setTimeout(()=>{ startMobileDrag(bedIds, ward.id, t); }, LONG_PRESS_MS);
+      longPressTimer=setTimeout(()=>{ 
+        startMobileDrag(bedIds, ward.id, t); 
+        // Prevent default after drag starts on Android
+        if(e.cancelable) e.preventDefault();
+      }, LONG_PRESS_MS);
     }, {passive:true});
     div.addEventListener('touchmove',(e)=>{
       const t=e.touches[0]; if(!t) return;
@@ -1241,13 +1246,19 @@ function renderBeds(){
         if(dx>MOVE_CANCEL_PX || dy>MOVE_CANCEL_PX){ clearTimeout(longPressTimer); }
         return; // let scroll proceed
       }
-      // dragging
-      if(e.cancelable) e.preventDefault();
+      // dragging - prevent all default behaviors on Android
+      e.preventDefault();
+      e.stopPropagation();
       updateMobileDrag(t);
     }, {passive:false});
     div.addEventListener('touchend',(e)=>{
       clearTimeout(longPressTimer);
-      const t=e.changedTouches[0]; if(mobileDrag && t){ endMobileDrag(t); if(e.cancelable) e.preventDefault(); }
+      const t=e.changedTouches[0]; 
+      if(mobileDrag && t){ 
+        e.preventDefault();
+        e.stopPropagation();
+        endMobileDrag(t); 
+      }
     }, {passive:false});
     div.addEventListener('touchcancel',()=>{ clearTimeout(longPressTimer); if(mobileDrag){ mobileDrag.ghost.remove(); mobileDrag=null; clearWardOver(); } });
 
@@ -1308,25 +1319,39 @@ function toggleBedSelection(bedId, divEl, explicit){
 // ===== Mobile touch drag-and-drop (fallback for iOS/Android) =====
 let mobileDrag=null; // { ghost, bedIds, fromWardId }
 let longPressTimer=null, lpStart={x:0,y:0};
-const LONG_PRESS_MS=180, MOVE_CANCEL_PX=8;
+const LONG_PRESS_MS=300, MOVE_CANCEL_PX=10;
 function getWardAtPoint(x,y){
-  const ul=document.getElementById('wardList'); if(!ul) return null;
+  const ul=document.getElementById('wardList'); 
+  if(!ul) {
+    console.log('wardList not found');
+    return null;
+  }
   let target=null;
-  ul.querySelectorAll('li').forEach(li=>{
+  const wards = ul.querySelectorAll('li');
+  console.log('Checking', wards.length, 'wards at point', x, y);
+  wards.forEach(li=>{
     const r=li.getBoundingClientRect();
-    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom){ target=li; }
+    console.log('Ward:', li.textContent.substring(0, 20), 'Rect:', {left: r.left, right: r.right, top: r.top, bottom: r.bottom});
+    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom){ 
+      target=li; 
+      console.log('Found ward at point!');
+    }
   });
   return target;
 }
 function clearWardOver(){ document.querySelectorAll('#wardList li.over').forEach(li=> li.classList.remove('over')); }
 function startMobileDrag(bedIds, fromWardId, touch){
+  console.log('startMobileDrag called', {bedIds, fromWardId, x: touch.clientX, y: touch.clientY});
   // create ghost near finger
   const ghost=document.createElement('div');
   ghost.textContent = `${bedIds.length>1? bedIds.length+" beds" : "1 bed"}`;
   ghost.style.position='fixed'; ghost.style.left=(touch.clientX+8)+'px'; ghost.style.top=(touch.clientY+8)+'px';
-  ghost.style.background='rgba(0,0,0,0.75)'; ghost.style.color='#fff'; ghost.style.padding='6px 10px'; ghost.style.borderRadius='8px'; ghost.style.fontSize='12px'; ghost.style.pointerEvents='none'; ghost.style.zIndex='2001'; ghost.style.boxShadow='0 6px 14px rgba(0,0,0,0.35)';
+  ghost.style.background='rgba(0,0,0,0.85)'; ghost.style.color='#fff'; ghost.style.padding='8px 12px'; ghost.style.borderRadius='8px'; ghost.style.fontSize='14px'; ghost.style.fontWeight='600'; ghost.style.pointerEvents='none'; ghost.style.zIndex='99999'; ghost.style.boxShadow='0 6px 14px rgba(0,0,0,0.35)';
   document.body.appendChild(ghost);
   mobileDrag={ ghost, bedIds, fromWardId };
+  console.log('mobileDrag set:', mobileDrag);
+  // Add haptic feedback if available
+  if(navigator.vibrate) navigator.vibrate(50);
   // prevent bed click opening editor shortly after drag
   try{ if(performance && performance.now) suppressBedClickUntil = performance.now() + 600; }catch{}
 }
@@ -1337,12 +1362,28 @@ function updateMobileDrag(touch){
 }
 function endMobileDrag(touch){
   if(!mobileDrag) return;
-  const {ghost, bedIds, fromWardId}=mobileDrag; ghost.remove();
+  const {ghost, bedIds, fromWardId}=mobileDrag; 
+  ghost.remove();
   clearWardOver();
+  
+  console.log('endMobileDrag called', {x: touch.clientX, y: touch.clientY, bedIds, fromWardId});
+  
   const li=getWardAtPoint(touch.clientX, touch.clientY);
+  console.log('Ward found:', li, li?.dataset?.wardId);
+  
   if(li){
     const targetWardId = li.dataset.wardId;
-    if(targetWardId){ moveBedsBetweenWards(bedIds, fromWardId, currentProfileId, targetWardId, currentProfileId); }
+    console.log('Target ward ID:', targetWardId, 'From ward ID:', fromWardId);
+    if(targetWardId && targetWardId !== fromWardId){ 
+      console.log('Moving beds:', bedIds, 'from', fromWardId, 'to', targetWardId);
+      moveBedsBetweenWards(bedIds, fromWardId, currentProfileId, targetWardId, currentProfileId);
+      // Visual confirmation
+      if(navigator.vibrate) navigator.vibrate(100);
+    } else {
+      console.log('Same ward or no target');
+    }
+  } else {
+    console.log('No ward found at touch point');
   }
   mobileDrag=null;
 }
