@@ -185,11 +185,94 @@ body.collapsed #expandSidebarBtn{display:none}
   }
   #profilePage button.ghost { background: transparent; color: var(--muted); }
   #profilePage button:active { transform: translateY(1px); }
-  #profilePage .io-line { display: grid; grid-template-columns: 1fr 160px 110px auto; gap: 10px; align-items: center; margin: 6px 0; }
+  #profilePage .io-line { 
+    display: grid; 
+    grid-template-columns: auto auto 1fr 160px 110px; 
+    grid-template-rows: auto auto;
+    gap: 10px; 
+    align-items: center; 
+    margin: 6px 0;
+    padding: 8px;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.2);
+    position: relative;
+    transition: all 0.2s;
+  }
+  #profilePage .io-line.dragging {
+    opacity: 0.5;
+    background: rgba(91,156,255,0.2);
+    border-color: rgba(91,156,255,0.5);
+    transform: scale(1.02);
+  }
+  #profilePage .lines.in,
+  #profilePage .lines.out {
+    min-height: 50px;
+    transition: background 0.2s;
+  }
+  #profilePage .lines.in:has(.dragging),
+  #profilePage .lines.out:has(.dragging) {
+    background: rgba(91,156,255,0.05);
+    border-radius: 8px;
+  }
+  #profilePage .io-line .drag-handle {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    cursor: grab;
+    color: #999;
+    font-size: 16px;
+    padding: 4px;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s;
+  }
+  #profilePage .io-line:hover .drag-handle {
+    color: #5b9cff;
+  }
+  #profilePage .io-line .drag-handle:active {
+    cursor: grabbing;
+    color: #3d7fd8;
+  }
+  #profilePage .io-line .remove {
+    grid-column: 2;
+    grid-row: 1;
+    background: transparent; 
+    border: 1px solid rgba(255,100,100,0.3); 
+    color: #ff6b6b; 
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #profilePage .io-line .remove:hover {
+    background: rgba(255,100,100,0.15);
+    border-color: #ff6b6b;
+    transform: scale(1.1);
+  }
+  #profilePage .io-line .kind-wrapper { 
+    grid-column: 3;
+    grid-row: 1;
+    width: 100%; 
+  }
   #profilePage .io-line input.kind { width: 100%; }
-  #profilePage .io-line input.display { width: 100%; }
-  #profilePage .io-line input.amount { width: 100%; }
-  #profilePage .io-line .remove { background: #2a2236; border: 1px solid #45345c; color: #f1e6ff; }
+  #profilePage .io-line input.display { 
+    grid-column: 4;
+    grid-row: 1;
+    width: 100%; 
+  }
+  #profilePage .io-line input.amount { 
+    grid-column: 5;
+    grid-row: 1;
+    width: 100%; 
+  }
   #profilePage .totals { margin-top: 8px; color: var(--muted); font-size: 13px; }
   #profilePage .totals .net { color: var(--good); }
   #profilePage .totals .neg { color: var(--bad); }
@@ -203,11 +286,33 @@ body.collapsed #expandSidebarBtn{display:none}
   #profilePage .io-card.afternoon h2 { color: #baf3d2; }
   @media (max-width: 720px) { #profilePage .grid.vs { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 720px) {
-    #profilePage .io-line { grid-template-columns: 1fr 1fr; }
-    #profilePage .io-line input.kind { grid-column: 1 / -1; }
-    #profilePage .io-line input.display { grid-column: 1 / 2; }
-    #profilePage .io-line input.amount { grid-column: 2 / 3; }
-    #profilePage .io-line .remove { grid-column: 1 / -1; justify-self: end; }
+    #profilePage .io-line { 
+      grid-template-columns: auto auto 1fr; 
+      grid-template-rows: auto auto auto;
+    }
+    #profilePage .io-line .drag-handle {
+      grid-column: 1;
+      grid-row: 1 / -1;
+    }
+    #profilePage .io-line .remove {
+      grid-column: 3;
+      grid-row: 1;
+      justify-self: end;
+      width: 28px;
+      height: 28px;
+    }
+    #profilePage .io-line .kind-wrapper { 
+      grid-column: 2 / -1; 
+      grid-row: 1;
+    }
+    #profilePage .io-line input.display { 
+      grid-column: 2 / 3; 
+      grid-row: 2;
+    }
+    #profilePage .io-line input.amount { 
+      grid-column: 3 / 4; 
+      grid-row: 2;
+    }
   }
 
   /* Mobile sticky preview bottom sheet (scoped) */
@@ -530,10 +635,12 @@ body.collapsed #expandSidebarBtn{display:none}
           <section class="card io-card morning">
             <h2>I/O เช้า</h2>
             <div class="io-block" data-block="morning">
-              <div class="row between"><div class="tag">I</div><button type="button" class="add add-in">+ Add</button></div>
+              <div class="row between"><div class="tag">I</div><button type="button" class="ghost io-snippets-btn" data-type="in" style="margin-left:8px;">⚙️ Snippets</button></div>
               <div class="lines in"></div>
-              <div class="row between"><div class="tag">O</div><button type="button" class="add add-out">+ Add</button></div>
+              <button type="button" class="add add-in" style="margin:8px 0;">+ Add</button>
+              <div class="row between"><div class="tag">O</div><button type="button" class="ghost io-snippets-btn" data-type="out" style="margin-left:8px;">⚙️ Snippets</button></div>
               <div class="lines out"></div>
+              <button type="button" class="add add-out" style="margin:8px 0;">+ Add</button>
               <div class="override">
                 <div class="tag">Override totals (optional)</div>
                 <div class="row">
@@ -548,10 +655,12 @@ body.collapsed #expandSidebarBtn{display:none}
           <section class="card io-card afternoon">
             <h2>I/O บ่าย</h2>
             <div class="io-block" data-block="afternoon">
-              <div class="row between"><div class="tag">I</div><button type="button" class="add add-in">+ Add</button></div>
+              <div class="row between"><div class="tag">I</div><button type="button" class="ghost io-snippets-btn" data-type="in" style="margin-left:8px;">⚙️ Snippets</button></div>
               <div class="lines in"></div>
-              <div class="row between"><div class="tag">O</div><button type="button" class="add add-out">+ Add</button></div>
+              <button type="button" class="add add-in" style="margin:8px 0;">+ Add</button>
+              <div class="row between"><div class="tag">O</div><button type="button" class="ghost io-snippets-btn" data-type="out" style="margin-left:8px;">⚙️ Snippets</button></div>
               <div class="lines out"></div>
+              <button type="button" class="add add-out" style="margin:8px 0;">+ Add</button>
               <div class="override">
                 <div class="tag">Override totals (optional)</div>
                 <div class="row">
@@ -643,6 +752,21 @@ body.collapsed #expandSidebarBtn{display:none}
     <div class="actions">
       <button id="moveCancelBtn">Cancel</button>
       <button id="moveConfirmBtn" class="save-btn">Move</button>
+    </div>
+  </div>
+</div>
+
+<!-- I/O Snippets Modal -->
+<div id="ioSnippetsModal" class="modal">
+  <div class="modal-content" style="max-width:520px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">
+      <h2 style="margin:0;" id="ioSnippetsTitle">I/O Snippets</h2>
+      <button id="ioSnippetsClose" class="ghost" title="Close">×</button>
+    </div>
+    <div id="ioSnippetsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+    <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+      <input id="ioSnippetsNew" type="text" placeholder="Add snippet…" style="flex:1; padding:8px;" />
+      <button id="ioSnippetsAdd" class="save-btn">Add</button>
     </div>
   </div>
 </div>
@@ -1895,6 +2019,127 @@ const notifyEditor=(function(){
     const oi=blockEl.querySelector('.override-in'), oo=blockEl.querySelector('.override-out');
     return { in: parseAmount(oi?.value), out: parseAmount(oo?.value), hasIn: !!(oi && oi.value.trim()!==''), hasOut: !!(oo && oo.value.trim()!=='') };
   }
+  
+  // I/O Snippets storage
+  const IO_SNIPPETS_KEY = 'io-snippets-v1';
+  function loadIOSnippets(){
+    try{
+      const saved = JSON.parse(localStorage.getItem(IO_SNIPPETS_KEY) || '{}');
+      return {
+        in: saved.in || ['oral', 'ivf', 'นม'],
+        out: saved.out || ['urine', 'drain']
+      };
+    }catch{
+      return { in: ['oral', 'ivf', 'นม'], out: ['urine', 'drain'] };
+    }
+  }
+  function saveIOSnippets(snippets){
+    try{
+      localStorage.setItem(IO_SNIPPETS_KEY, JSON.stringify(snippets));
+    }catch{}
+  }
+  let ioSnippets = loadIOSnippets();
+  
+  // I/O Snippets Modal Setup
+  const ioSnippetsModal = document.getElementById('ioSnippetsModal');
+  const ioSnippetsClose = document.getElementById('ioSnippetsClose');
+  const ioSnippetsList = document.getElementById('ioSnippetsList');
+  const ioSnippetsNew = document.getElementById('ioSnippetsNew');
+  const ioSnippetsAdd = document.getElementById('ioSnippetsAdd');
+  const ioSnippetsTitle = document.getElementById('ioSnippetsTitle');
+  let currentSnippetType = 'in'; // 'in' or 'out'
+
+  function openIOSnippetsModal(type) {
+    currentSnippetType = type;
+    if(ioSnippetsTitle) ioSnippetsTitle.textContent = type === 'in' ? 'I Snippets' : 'O Snippets';
+    buildIOSnippetsUI();
+    if(ioSnippetsModal) ioSnippetsModal.style.display = 'flex';
+  }
+
+  function closeIOSnippetsModal() {
+    if(ioSnippetsModal) ioSnippetsModal.style.display = 'none';
+  }
+
+  function buildIOSnippetsUI() {
+    if(!ioSnippetsList) return;
+    ioSnippetsList.innerHTML = '';
+    const snippets = ioSnippets[currentSnippetType] || [];
+    snippets.forEach((text, idx) => {
+      const row = document.createElement('div');
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = '1fr auto';
+      row.style.gap = '8px';
+      row.style.alignItems = 'center';
+      
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.value = text;
+      inp.style.padding = '8px';
+      inp.addEventListener('input', () => {
+        ioSnippets[currentSnippetType][idx] = inp.value;
+        saveIOSnippets(ioSnippets);
+      });
+      
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.className = 'ghost';
+      del.title = 'Delete';
+      del.onclick = () => {
+        ioSnippets[currentSnippetType].splice(idx, 1);
+        saveIOSnippets(ioSnippets);
+        buildIOSnippetsUI();
+      };
+      
+      row.appendChild(inp);
+      row.appendChild(del);
+      ioSnippetsList.appendChild(row);
+    });
+  }
+
+  ioSnippetsClose?.addEventListener('click', closeIOSnippetsModal);
+  ioSnippetsModal?.addEventListener('click', (e) => {
+    if(e.target === ioSnippetsModal) closeIOSnippetsModal();
+  });
+
+  ioSnippetsAdd?.addEventListener('click', () => {
+    const val = ioSnippetsNew?.value.trim();
+    if(!val) return;
+    if(!ioSnippets[currentSnippetType]) ioSnippets[currentSnippetType] = [];
+    ioSnippets[currentSnippetType].push(val);
+    saveIOSnippets(ioSnippets);
+    if(ioSnippetsNew) ioSnippetsNew.value = '';
+    buildIOSnippetsUI();
+  });
+
+  ioSnippetsNew?.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') {
+      e.preventDefault();
+      ioSnippetsAdd?.click();
+    }
+  });
+
+  // Wire up snippet buttons using event delegation
+  document.body.addEventListener('click', (e) => {
+    if(e.target.classList.contains('io-snippets-btn')) {
+      const type = e.target.getAttribute('data-type');
+      openIOSnippetsModal(type);
+    }
+  });
+  
+  // Helper function for drag and drop positioning
+  function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.io-line:not(.dragging)')];
+    return draggableElements.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closest.offset) {
+        return { offset: offset, element: child };
+      } else {
+        return closest;
+      }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+  }
+  
   function recalc(blockEl){
     const ov=getOverride(blockEl);
     const calcIn=sumLines(blockEl.querySelector('.lines.in'));
@@ -1912,12 +2157,238 @@ const notifyEditor=(function(){
   function recalcAll(){ document.querySelectorAll('.io-block').forEach(b=>recalc(b)); }
   function addIOLine(container, kind){
     const line=el('div',{class:'io-line'});
+    line.draggable = true;
+    
+    // Add drag handle
+    const dragHandle = el('div', {class: 'drag-handle'});
+    dragHandle.innerHTML = '⋮⋮';
+    dragHandle.title = 'Drag to reorder';
+    
+    // Remove button (top right)
+    const rm=el('button',{class:'remove',onclick:()=>{ line.remove(); recalc(container.closest('.io-block')); if(changeCb) changeCb(); }},'×');
+    
+    // Create wrapper for kind input with dropdown button
+    const kindWrapper = el('div', {class: 'kind-wrapper'});
+    kindWrapper.style.position = 'relative';
+    kindWrapper.style.display = 'flex';
+    kindWrapper.style.alignItems = 'center';
+    
     const kindInput=el('input',{class:'kind',placeholder:kind==='in'?'oral / ivf / นม / ...':'urine / drain / ...'});
+    kindInput.style.paddingRight = '30px'; // Make room for dropdown button
+    
+    const dropdownBtn = el('button', {class: 'snippet-dropdown-btn', type: 'button'});
+    dropdownBtn.textContent = '▾';
+    dropdownBtn.style.position = 'absolute';
+    dropdownBtn.style.right = '4px';
+    dropdownBtn.style.top = '50%';
+    dropdownBtn.style.transform = 'translateY(-50%)';
+    dropdownBtn.style.background = 'transparent';
+    dropdownBtn.style.border = 'none';
+    dropdownBtn.style.cursor = 'pointer';
+    dropdownBtn.style.padding = '4px 8px';
+    dropdownBtn.style.fontSize = '14px';
+    dropdownBtn.style.color = '#666';
+    dropdownBtn.title = 'Show snippets';
+    
+    kindWrapper.appendChild(kindInput);
+    kindWrapper.appendChild(dropdownBtn);
+    
     const displayInput=el('input',{class:'display',placeholder:'e.g., 500+ท1'});
     const amount=el('input',{class:'amount',placeholder:'500'});
-    const rm=el('button',{class:'remove',onclick:()=>{ line.remove(); recalc(container.closest('.io-block')); if(changeCb) changeCb(); }},'×');
-    line.append(kindInput,displayInput,amount,rm);
+    
+    line.append(dragHandle, rm, kindWrapper, displayInput, amount);
     container.appendChild(line);
+    
+    // Drag and drop handlers
+    line.addEventListener('dragstart', (e) => {
+      line.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    
+    line.addEventListener('dragend', (e) => {
+      line.classList.remove('dragging');
+      recalc(container.closest('.io-block'));
+      if(changeCb) changeCb();
+    });
+    
+    // Function to show snippet dropdown
+    const showSnippetDropdown = (filter = '') => {
+      const snippets = ioSnippets[kind] || [];
+      if(snippets.length === 0) return;
+      
+      // Filter snippets based on input
+      const filtered = filter ? snippets.filter(s => s.toLowerCase().includes(filter.toLowerCase())) : snippets;
+      if(filtered.length === 0) return;
+      
+      // Remove existing dropdown
+      const existing = document.querySelector('.io-snippet-suggestions');
+      if(existing) existing.remove();
+      const existingBackdrop = document.querySelector('.io-snippet-backdrop');
+      if(existingBackdrop) existingBackdrop.remove();
+      
+      // Create backdrop for mobile (invisible, just to catch taps)
+      const backdrop = document.createElement('div');
+      backdrop.className = 'io-snippet-backdrop';
+      backdrop.style.position = 'fixed';
+      backdrop.style.top = '0';
+      backdrop.style.left = '0';
+      backdrop.style.right = '0';
+      backdrop.style.bottom = '0';
+      backdrop.style.zIndex = '999';
+      backdrop.style.background = 'transparent';
+      backdrop.addEventListener('click', () => {
+        const dropdown = document.querySelector('.io-snippet-suggestions');
+        if(dropdown) dropdown.remove();
+        backdrop.remove();
+      });
+      backdrop.addEventListener('touchstart', () => {
+        const dropdown = document.querySelector('.io-snippet-suggestions');
+        if(dropdown) dropdown.remove();
+        backdrop.remove();
+      });
+      
+      document.body.appendChild(backdrop);
+      
+      // Create suggestion dropdown
+      const dropdown = document.createElement('div');
+      dropdown.className = 'io-snippet-suggestions';
+      dropdown.style.position = 'fixed'; // Changed from absolute to fixed
+      dropdown.style.background = '#fff';
+      dropdown.style.border = '1px solid #ddd';
+      dropdown.style.borderRadius = '4px';
+      dropdown.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+      dropdown.style.zIndex = '1000';
+      dropdown.style.maxHeight = '200px';
+      dropdown.style.overflowY = 'auto';
+      dropdown.style.minWidth = '150px';
+      
+      filtered.forEach(text => {
+        const item = document.createElement('div');
+        item.textContent = text;
+        item.style.padding = '8px 12px';
+        item.style.cursor = 'pointer';
+        item.style.borderBottom = '1px solid #f0f0f0';
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          kindInput.value = text;
+          dropdown.remove();
+          const backdrop = document.querySelector('.io-snippet-backdrop');
+          if(backdrop) backdrop.remove();
+          displayInput.focus();
+          updatePreview();
+          if(changeCb) changeCb();
+        });
+        item.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          kindInput.value = text;
+          dropdown.remove();
+          const backdrop = document.querySelector('.io-snippet-backdrop');
+          if(backdrop) backdrop.remove();
+          displayInput.focus();
+          updatePreview();
+          if(changeCb) changeCb();
+        });
+        item.addEventListener('mouseover', () => {
+          item.style.background = '#f0f0f0';
+        });
+        item.addEventListener('mouseout', () => {
+          item.style.background = '';
+        });
+        dropdown.appendChild(item);
+      });
+      
+      document.body.appendChild(dropdown);
+      
+      // Position dropdown below input using fixed positioning
+      const rect = kindInput.getBoundingClientRect();
+      dropdown.style.left = rect.left + 'px';
+      dropdown.style.top = (rect.bottom + 2) + 'px';
+      dropdown.style.width = Math.max(150, rect.width) + 'px';
+      
+      // Reposition on scroll (for mobile)
+      const repositionDropdown = () => {
+        if(document.body.contains(dropdown)) {
+          const newRect = kindInput.getBoundingClientRect();
+          dropdown.style.left = newRect.left + 'px';
+          dropdown.style.top = (newRect.bottom + 2) + 'px';
+        }
+      };
+      
+      // Listen for scroll events
+      let scrollTimeout;
+      const handleScroll = () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(repositionDropdown, 10);
+      };
+      window.addEventListener('scroll', handleScroll, true);
+      
+      // Clean up scroll listener when dropdown is removed
+      const originalRemove = dropdown.remove.bind(dropdown);
+      dropdown.remove = () => {
+        window.removeEventListener('scroll', handleScroll, true);
+        const backdrop = document.querySelector('.io-snippet-backdrop');
+        if(backdrop) backdrop.remove();
+        originalRemove();
+      };
+      
+      return dropdown;
+    };
+    
+    // Show suggestions when typing (only if there's input)
+    kindInput.addEventListener('input', () => {
+      const val = kindInput.value.trim();
+      if(val) {
+        showSnippetDropdown(val);
+      } else {
+        // Remove dropdown if input is cleared
+        const existing = document.querySelector('.io-snippet-suggestions');
+        if(existing) existing.remove();
+      }
+      if(changeCb) changeCb();
+    });
+    
+    // Dropdown button click - show all snippets
+    let dropdownBtnClicked = false;
+    let isScrolling = false;
+    
+    dropdownBtn.addEventListener('mousedown', (e) => {
+      dropdownBtnClicked = true;
+    });
+    dropdownBtn.addEventListener('touchstart', (e) => {
+      dropdownBtnClicked = true;
+    });
+    dropdownBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showSnippetDropdown('');
+      setTimeout(() => {
+        dropdownBtnClicked = false;
+      }, 200);
+    });
+    
+    // Track scrolling to prevent blur from closing dropdown
+    let scrollTimer;
+    const handleInputScroll = () => {
+      isScrolling = true;
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        isScrolling = false;
+      }, 300);
+    };
+    window.addEventListener('scroll', handleInputScroll, true);
+    window.addEventListener('touchmove', handleInputScroll, true);
+    
+    // Close dropdown on blur (unless dropdown button was clicked or user is scrolling)
+    kindInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        if(!dropdownBtnClicked && !isScrolling) {
+          const dropdown = document.querySelector('.io-snippet-suggestions');
+          if(dropdown) dropdown.remove();
+          const backdrop = document.querySelector('.io-snippet-backdrop');
+          if(backdrop) backdrop.remove();
+        }
+      }, 150);
+    });
     
     // Auto-fill amount from display if display is just a number
     displayInput.addEventListener('input',()=>{ 
@@ -1953,7 +2424,19 @@ const notifyEditor=(function(){
     const sumIn=data.override?.hasIn?data.override.in:calcIn;
     const sumOut=data.override?.hasOut?data.override.out:calcOut;
     const net=sumIn-sumOut;
-    const fmtPairs=arr=>arr.map(x=>`${x.kind||'?'} ${(x.display&&x.display.trim())?x.display.trim():`${Math.round(x.amount)}`}`.trim()).join(', ');
+    const fmtPairs=arr=>arr.map(x=>{
+      const kind = x.kind || '?';
+      // If display is provided, use it
+      if(x.display && x.display.trim()) {
+        return `${kind} ${x.display.trim()}`;
+      }
+      // If amount is 0 or empty, show only kind
+      if(!x.amount || x.amount === 0) {
+        return kind;
+      }
+      // Otherwise show kind + amount
+      return `${kind} ${Math.round(x.amount)}`;
+    }).join(', ');
     const lines=[];
     lines.push(`I/O ${label}:`);
     lines.push(`I: ${Math.round(sumIn)} (${fmtPairs(data.in)})`);
@@ -2217,6 +2700,23 @@ const notifyEditor=(function(){
       const linesOut=block.querySelector('.lines.out');
       addIn?.addEventListener('click', ()=>{ addIOLine(linesIn,'in'); updatePreview(); if(changeCb) changeCb(); });
       addOut?.addEventListener('click', ()=>{ addIOLine(linesOut,'out'); updatePreview(); if(changeCb) changeCb(); });
+      
+      // Set up drag-and-drop reordering for I/O lines
+      [linesIn, linesOut].forEach(container => {
+        if(!container) return;
+        container.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          const afterElement = getDragAfterElement(container, e.clientY);
+          const dragging = container.querySelector('.dragging');
+          if (dragging) {
+            if (afterElement == null) {
+              container.appendChild(dragging);
+            } else {
+              container.insertBefore(dragging, afterElement);
+            }
+          }
+        });
+      });
     });
     document.querySelectorAll('.override-in, .override-out').forEach(inp=>{
       inp.addEventListener('input', ()=> { recalc(inp.closest('.io-block')); if(changeCb) changeCb(); });
