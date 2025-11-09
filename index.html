@@ -1090,9 +1090,11 @@ function renderWards(){
     if(w.id===selectedWardId)li.classList.add('selected');
     li.onclick=()=>{
       selectedWardId=w.id;selectedBedId=null;renderWards();renderBeds();
-      // If WardWork is open, switch to beds view immediately
+      // If WardWork or Notes is open, switch to beds view immediately
       const wwVisible = (wardWorkPage && wardWorkPage.style.display && wardWorkPage.style.display !== 'none');
+      const notesVisible = (notesPage && notesPage.style.display && notesPage.style.display !== 'none');
       if(wwVisible){ backFromWW(); }
+      else if(notesVisible){ backFromNotes(); }
       else { backToBeds(); }
     };
     li.draggable=true;
@@ -3234,9 +3236,19 @@ function removeBlockLabel(profileId, label){
 }
 
 function openWardWork(){
+  // Toggle: if already open, close it
+  if(wardWorkPage.style.display === 'flex'){
+    bedContainer.style.display='block';
+    profilePage.style.display='none';
+    wardWorkPage.style.display='none';
+    notesPage.style.display='none';
+    return;
+  }
+  
   bedContainer.style.display='none';
   profilePage.style.display='none';
   wardWorkPage.style.display='flex';
+  notesPage.style.display='none';
   
   // Load profiles on first open
   if(!wwProfiles || Object.keys(wwProfiles).length === 0){
@@ -3456,7 +3468,12 @@ wwTitle?.addEventListener('change', () => {
   updateWWPreview();
 });
 
-function backFromWW(){ wardWorkPage.style.display='none'; bedContainer.style.display='block'; }
+function backFromWW(){ 
+  wardWorkPage.style.display='none'; 
+  bedContainer.style.display='block'; 
+  profilePage.style.display='none';
+  notesPage.style.display='none';
+}
 wardWorkBtn?.addEventListener('click', openWardWork);
 backToBedsFromWW?.addEventListener('click', backFromWW);
 
@@ -3591,6 +3608,16 @@ function loadCurrentNotesProfile(){
 }
 
 function openNotes(){
+  // Toggle: if already open, close it
+  if(notesPage.style.display === 'flex'){
+    saveCurrentNotesContent();
+    bedContainer.style.display='block';
+    profilePage.style.display='none';
+    wardWorkPage.style.display='none';
+    notesPage.style.display='none';
+    return;
+  }
+  
   bedContainer.style.display='none';
   profilePage.style.display='none';
   wardWorkPage.style.display='none';
@@ -3609,6 +3636,7 @@ function backFromNotes(){
   saveCurrentNotesContent();
   notesPage.style.display='none'; 
   bedContainer.style.display='block'; 
+  wardWorkPage.style.display='none';
 }
 
 notesBtn?.addEventListener('click', openNotes);
@@ -4566,6 +4594,8 @@ function openProfilePage(bed, opts={}){
 function backToBeds(){
   profilePage.style.display='none';
   bedContainer.style.display='block';
+  wardWorkPage.style.display='none';
+  notesPage.style.display='none';
 }
 
 backToBedsBtn.onclick=backToBeds;
