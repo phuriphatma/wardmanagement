@@ -1227,40 +1227,58 @@ function renderBeds(){
     });
 
     // Mobile long-press touch drag
+    let touchStartEl = null;
     div.addEventListener('touchstart',(e)=>{
+      touchStartEl = div;
       const t=e.touches[0]; if(!t) return;
       lpStart={x:t.clientX, y:t.clientY};
       const bedIds=(selectedBedIds.size>0 && selectedBedIds.has(b.id))? Array.from(selectedBedIds): [b.id];
       clearTimeout(longPressTimer);
       longPressTimer=setTimeout(()=>{ 
+        console.log('Long press timer fired, starting drag');
         startMobileDrag(bedIds, ward.id, t); 
-        // Prevent default after drag starts on Android
-        if(e.cancelable) e.preventDefault();
       }, LONG_PRESS_MS);
     }, {passive:true});
     div.addEventListener('touchmove',(e)=>{
       const t=e.touches[0]; if(!t) return;
+      console.log('touchmove on bed div:', {mobileDrag: !!mobileDrag, x: t.clientX, y: t.clientY});
       // cancel long-press if user intends to scroll before drag starts
       if(!mobileDrag){
         const dx=Math.abs(t.clientX-lpStart.x), dy=Math.abs(t.clientY-lpStart.y);
-        if(dx>MOVE_CANCEL_PX || dy>MOVE_CANCEL_PX){ clearTimeout(longPressTimer); }
+        if(dx>MOVE_CANCEL_PX || dy>MOVE_CANCEL_PX){ 
+          clearTimeout(longPressTimer); 
+          console.log('Long press cancelled due to movement');
+        }
         return; // let scroll proceed
       }
       // dragging - prevent all default behaviors on Android
+      console.log('Dragging - calling updateMobileDrag');
       e.preventDefault();
       e.stopPropagation();
       updateMobileDrag(t);
     }, {passive:false});
     div.addEventListener('touchend',(e)=>{
+      console.log('touchend on bed div', {mobileDrag: !!mobileDrag, touchStartEl: touchStartEl === div});
       clearTimeout(longPressTimer);
       const t=e.changedTouches[0]; 
-      if(mobileDrag && t){ 
+      if(mobileDrag && t && touchStartEl === div){ 
+        console.log('Calling endMobileDrag from bed div');
         e.preventDefault();
         e.stopPropagation();
         endMobileDrag(t); 
       }
+      touchStartEl = null;
     }, {passive:false});
-    div.addEventListener('touchcancel',()=>{ clearTimeout(longPressTimer); if(mobileDrag){ mobileDrag.ghost.remove(); mobileDrag=null; clearWardOver(); } });
+    div.addEventListener('touchcancel',(e)=>{ 
+      console.log('touchcancel on bed div');
+      clearTimeout(longPressTimer); 
+      if(mobileDrag){ 
+        mobileDrag.ghost.remove(); 
+        mobileDrag=null; 
+        clearWardOver(); 
+      }
+      touchStartEl = null;
+    });
 
   const actions=document.createElement('div');
     actions.className='actions-row';
@@ -1340,6 +1358,27 @@ function getWardAtPoint(x,y){
   return target;
 }
 function clearWardOver(){ document.querySelectorAll('#wardList li.over').forEach(li=> li.classList.remove('over')); }
+
+// Global touch handlers for mobile drag (Android Chrome compatibility)
+document.addEventListener('touchmove', (e) => {
+  if(!mobileDrag) return;
+  const t = e.touches[0];
+  if(!t) return;
+  console.log('Global touchmove during drag');
+  e.preventDefault();
+  updateMobileDrag(t);
+}, {passive: false});
+
+document.addEventListener('touchend', (e) => {
+  if(!mobileDrag) return;
+  console.log('Global touchend during drag');
+  const t = e.changedTouches[0];
+  if(t) {
+    e.preventDefault();
+    endMobileDrag(t);
+  }
+}, {passive: false});
+
 function startMobileDrag(bedIds, fromWardId, touch){
   console.log('startMobileDrag called', {bedIds, fromWardId, x: touch.clientX, y: touch.clientY});
   // create ghost near finger
