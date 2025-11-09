@@ -248,9 +248,25 @@ body.collapsed #expandSidebarBtn{display:none}
     cursor: pointer;
     transition: all 0.2s;
     padding: 0;
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
+    line-height: 1;
+  }
+  /* Hide delete buttons on mobile by default */
+  @media (max-width: 720px) {
+    #profilePage .io-line .remove {
+      display: none !important;
+    }
+    #profilePage .io-block.editing .io-line .remove {
+      display: flex !important;
+      position: relative;
+      z-index: 10;
+    }
+    /* Ensure the drag handle doesn't hide the remove button */
+    #profilePage .io-block.editing .io-line .drag-handle {
+      opacity: 0.3;
+    }
   }
   #profilePage .io-line .remove:hover {
     background: rgba(255,100,100,0.15);
@@ -263,15 +279,37 @@ body.collapsed #expandSidebarBtn{display:none}
     width: 100%; 
   }
   #profilePage .io-line input.kind { width: 100%; }
+  #profilePage .io-line textarea.kind { 
+    width: 100%; 
+    min-height: 38px;
+    line-height: 1.4;
+    font-family: inherit;
+  }
   #profilePage .io-line input.display { 
     grid-column: 4;
     grid-row: 1;
     width: 100%; 
   }
+  #profilePage .io-line textarea.display { 
+    grid-column: 4;
+    grid-row: 1;
+    width: 100%; 
+    min-height: 38px;
+    line-height: 1.4;
+    font-family: inherit;
+  }
   #profilePage .io-line input.amount { 
     grid-column: 5;
     grid-row: 1;
     width: 100%; 
+  }
+  #profilePage .io-line textarea.amount { 
+    grid-column: 5;
+    grid-row: 1;
+    width: 100%; 
+    min-height: 38px;
+    line-height: 1.4;
+    font-family: inherit;
   }
   #profilePage .totals { margin-top: 8px; color: var(--muted); font-size: 13px; }
   #profilePage .totals .net { color: var(--good); }
@@ -287,12 +325,15 @@ body.collapsed #expandSidebarBtn{display:none}
   @media (max-width: 720px) { #profilePage .grid.vs { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 720px) {
     #profilePage .io-line { 
-      grid-template-columns: auto auto 1fr; 
-      grid-template-rows: auto auto auto;
+      grid-template-columns: 20px 1fr 90px; 
+      grid-template-rows: auto auto;
+      gap: 6px;
+      padding: 6px;
     }
     #profilePage .io-line .drag-handle {
       grid-column: 1;
       grid-row: 1 / -1;
+      font-size: 14px;
     }
     #profilePage .io-line .remove {
       grid-column: 3;
@@ -300,18 +341,32 @@ body.collapsed #expandSidebarBtn{display:none}
       justify-self: end;
       width: 28px;
       height: 28px;
+      margin: 0;
+      flex-shrink: 0;
     }
     #profilePage .io-line .kind-wrapper { 
-      grid-column: 2 / -1; 
+      grid-column: 2 / 3; 
       grid-row: 1;
     }
-    #profilePage .io-line input.display { 
+    #profilePage .io-line input.kind,
+    #profilePage .io-line textarea.kind,
+    #profilePage .io-line input.display,
+    #profilePage .io-line textarea.display,
+    #profilePage .io-line input.amount,
+    #profilePage .io-line textarea.amount {
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    #profilePage .io-line input.display,
+    #profilePage .io-line textarea.display { 
       grid-column: 2 / 3; 
       grid-row: 2;
     }
-    #profilePage .io-line input.amount { 
+    #profilePage .io-line input.amount,
+    #profilePage .io-line textarea.amount { 
       grid-column: 3 / 4; 
       grid-row: 2;
+      width: 100%;
     }
   }
 
@@ -408,6 +463,7 @@ body.collapsed #expandSidebarBtn{display:none}
       <button id="editWardsBtn">Edit Wards</button>
       <button id="presetsBtn">Presets</button>
   <button id="wardWorkBtn">WardWork</button>
+  <button id="notesBtn">Notes</button>
       <!-- Compact Profiles control -->
       <div id="profilesMenu" style="position:relative; margin-left:auto;">
         <button id="profileMenuBtn" class="ghost" style="border:1px solid #ddd; padding:6px 10px; border-radius:6px;">Profile</button>
@@ -552,6 +608,54 @@ body.collapsed #expandSidebarBtn{display:none}
         </div>
       </div>
     </div>
+
+    <!-- Notes Page -->
+    <div id="notesPage" style="display:none;flex-direction:column;padding:16px 16px 140px 16px;overflow-y:auto;width:100%;">
+      <button id="backToBedsFromNotes" style="margin-bottom:12px;">← Back</button>
+      <header>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <h2 style="margin:0;">Notes</h2>
+          <div id="notesProfilesMenu" style="position:relative;">
+            <button id="notesProfileMenuBtn" class="ghost" style="border:1px solid #ddd; padding:6px 10px; border-radius:6px;">Document</button>
+            <div id="notesProfileMenuPanel" style="display:none; position:absolute; right:0; top:100%; margin-top:6px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,0.1); width:280px; max-height:60vh; overflow:auto; z-index:50;">
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #eee;">
+                <strong>Notes Documents</strong>
+                <button id="notesCloseProfilePanel" class="ghost" title="Close">×</button>
+              </div>
+              <ul id="notesProfileList" style="list-style:none; margin:0; padding:6px 0;"></ul>
+              <div style="display:flex; gap:6px; padding:10px 12px; border-top:1px solid #eee; position:sticky; bottom:0; background:#fff; flex-wrap:wrap;">
+                <button id="notesProfNewBtn" title="New document">New</button>
+                <button id="notesProfDupBtn" title="Duplicate current">Dup</button>
+                <button id="notesProfRenBtn" title="Rename">Ren</button>
+                <button id="notesProfDelBtn" title="Delete" class="delete">Del</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="color:#666;font-size:12px;margin-top:4px;">Free text for personal notes</div>
+      </header>
+      <section class="card" style="max-width:720px;">
+        <textarea id="notesTextarea" rows="30" style="width:100%;min-height:600px;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;font-size:14px;line-height:1.5;resize:vertical;" placeholder="Type your notes here..."></textarea>
+      </section>
+      <!-- Notes Rename Modal -->
+      <div id="notesRenameModal" class="modal">
+        <div class="modal-content" style="max-width:480px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">
+            <h2 style="margin:0;">Rename Document</h2>
+            <button id="notesRenameClose" class="ghost" title="Close">×</button>
+          </div>
+          <label style="display:block; margin-bottom:12px;">
+            Document Name
+            <input id="notesRenameInput" type="text" style="width:100%; padding:8px; margin-top:4px;" />
+          </label>
+          <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button id="notesRenameCancel" class="ghost">Cancel</button>
+            <button id="notesRenameSave" class="save-btn">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="bedContainer">
       <h2 id="wardTitle">Select a ward</h2>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -588,6 +692,10 @@ body.collapsed #expandSidebarBtn{display:none}
         <div class="col col-form">
           <section class="card">
             <h2>Patient</h2>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <button type="button" class="ghost" id="copyHeaderBtn" style="flex:1; font-size:13px;">📋 Copy Header</button>
+              <button type="button" class="ghost" id="copyHeaderHNBtn" style="flex:1; font-size:13px;">📋 Copy w/ HN</button>
+            </div>
             <div class="row">
               <label>Bed/Room
                 <input id="bed" placeholder="e.g., กว6/1 รวม3 — ชื่อผู้ป่วย" />
@@ -633,7 +741,10 @@ body.collapsed #expandSidebarBtn{display:none}
           </section>
 
           <section class="card io-card morning">
-            <h2>I/O เช้า</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <h2>I/O เช้า</h2>
+              <button type="button" class="ghost io-edit-btn" data-block="morning" style="font-size:14px;">✎ Edit</button>
+            </div>
             <div class="io-block" data-block="morning">
               <div class="row between"><div class="tag">I</div><button type="button" class="ghost io-snippets-btn" data-type="in" style="margin-left:8px;">⚙️ Snippets</button></div>
               <div class="lines in"></div>
@@ -653,7 +764,10 @@ body.collapsed #expandSidebarBtn{display:none}
           </section>
 
           <section class="card io-card afternoon">
-            <h2>I/O บ่าย</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <h2>I/O บ่าย</h2>
+              <button type="button" class="ghost io-edit-btn" data-block="afternoon" style="font-size:14px;">✎ Edit</button>
+            </div>
             <div class="io-block" data-block="afternoon">
               <div class="row between"><div class="tag">I</div><button type="button" class="ghost io-snippets-btn" data-type="in" style="margin-left:8px;">⚙️ Snippets</button></div>
               <div class="lines in"></div>
@@ -2165,23 +2279,40 @@ const notifyEditor=(function(){
     dragHandle.title = 'Drag to reorder';
     
     // Remove button (top right)
-    const rm=el('button',{class:'remove',onclick:()=>{ line.remove(); recalc(container.closest('.io-block')); if(changeCb) changeCb(); }},'×');
+    const rm=el('button',{
+      class:'remove',
+      type: 'button',
+      onclick:()=>{ 
+        line.remove(); 
+        recalc(container.closest('.io-block')); 
+        updatePreview();
+        if(changeCb) changeCb(); 
+      }
+    },'×');
     
     // Create wrapper for kind input with dropdown button
     const kindWrapper = el('div', {class: 'kind-wrapper'});
     kindWrapper.style.position = 'relative';
     kindWrapper.style.display = 'flex';
-    kindWrapper.style.alignItems = 'center';
+    kindWrapper.style.alignItems = 'flex-start';
     
-    const kindInput=el('input',{class:'kind',placeholder:kind==='in'?'oral / ivf / นม / ...':'urine / drain / ...'});
+    const kindInput=el('textarea',{class:'kind',placeholder:kind==='in'?'oral / ivf / นม / ...':'urine / drain / ...'});
+    kindInput.rows = 1;
     kindInput.style.paddingRight = '30px'; // Make room for dropdown button
+    kindInput.style.resize = 'none';
+    kindInput.style.overflow = 'hidden';
+    
+    // Auto-resize textarea as content grows
+    kindInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = this.scrollHeight + 'px';
+    });
     
     const dropdownBtn = el('button', {class: 'snippet-dropdown-btn', type: 'button'});
     dropdownBtn.textContent = '▾';
     dropdownBtn.style.position = 'absolute';
     dropdownBtn.style.right = '4px';
-    dropdownBtn.style.top = '50%';
-    dropdownBtn.style.transform = 'translateY(-50%)';
+    dropdownBtn.style.top = '8px';
     dropdownBtn.style.background = 'transparent';
     dropdownBtn.style.border = 'none';
     dropdownBtn.style.cursor = 'pointer';
@@ -2193,8 +2324,23 @@ const notifyEditor=(function(){
     kindWrapper.appendChild(kindInput);
     kindWrapper.appendChild(dropdownBtn);
     
-    const displayInput=el('input',{class:'display',placeholder:'e.g., 500+ท1'});
-    const amount=el('input',{class:'amount',placeholder:'500'});
+    const displayInput=el('textarea',{class:'display',placeholder:'e.g., 500+ท1'});
+    displayInput.rows = 1;
+    displayInput.style.resize = 'none';
+    displayInput.style.overflow = 'hidden';
+    displayInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = this.scrollHeight + 'px';
+    });
+    
+    const amount=el('textarea',{class:'amount',placeholder:'500'});
+    amount.rows = 1;
+    amount.style.resize = 'none';
+    amount.style.overflow = 'hidden';
+    amount.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = this.scrollHeight + 'px';
+    });
     
     line.append(dragHandle, rm, kindWrapper, displayInput, amount);
     container.appendChild(line);
@@ -2410,11 +2556,16 @@ const notifyEditor=(function(){
     kindInput.addEventListener('input',()=>{ updatePreview(); if(changeCb) changeCb(); });
   }
   function gatherIO(blockEl){
-    const read=cls=>Array.from(blockEl.querySelectorAll(`.lines.${cls} .io-line`)).map(line=>({
-      kind: line.querySelector('input.kind').value.trim(),
-      display: line.querySelector('input.display')?.value.trim()||'',
-      amount: parseAmount(line.querySelector('input.amount').value)
-    })).filter(x=>x.kind||x.amount);
+    const read=cls=>Array.from(blockEl.querySelectorAll(`.lines.${cls} .io-line`)).map(line=>{
+      const kindEl = line.querySelector('.kind');
+      const displayEl = line.querySelector('.display');
+      const amountEl = line.querySelector('.amount');
+      return {
+        kind: kindEl?.value.trim()||'',
+        display: displayEl?.value.trim()||'',
+        amount: parseAmount(amountEl?.value||'')
+      };
+    }).filter(x=>x.kind||x.amount);
     const ov=getOverride(blockEl);
     return { in: read('in'), out: read('out'), override: ov };
   }
@@ -2720,6 +2871,94 @@ const notifyEditor=(function(){
     });
     document.querySelectorAll('.override-in, .override-out').forEach(inp=>{
       inp.addEventListener('input', ()=> { recalc(inp.closest('.io-block')); if(changeCb) changeCb(); });
+    });
+    
+    // Edit button toggles for showing delete buttons on mobile
+    document.querySelectorAll('.io-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const blockName = btn.getAttribute('data-block');
+        const block = document.querySelector(`.io-block[data-block="${blockName}"]`);
+        if(!block) return;
+        
+        const isEditing = block.classList.contains('editing');
+        if(isEditing) {
+          block.classList.remove('editing');
+          btn.textContent = '✎ Edit';
+          btn.style.color = '';
+        } else {
+          block.classList.add('editing');
+          btn.textContent = '✓ Done';
+          btn.style.color = '#5b9cff';
+        }
+      });
+    });
+    
+    // Copy header buttons
+    async function copyToClipboard(text, button) {
+      try {
+        if(navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        const originalText = button.textContent;
+        button.textContent = '✓ Copied!';
+        button.style.color = '#3ecf8e';
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.style.color = '';
+        }, 1500);
+        return true;
+      } catch (err) {
+        alert('Failed to copy: ' + err.message);
+        return false;
+      }
+    }
+    
+    const copyHeaderBtn = document.getElementById('copyHeaderBtn');
+    const copyHeaderHNBtn = document.getElementById('copyHeaderHNBtn');
+    
+    copyHeaderBtn?.addEventListener('click', () => {
+      const bed = $$('#bed')?.value.trim() || '';
+      const ward = (currentWardName || '').trim();
+      const hashtags = $$('#hashtags')?.value.trim() || '';
+      
+      let header = bed;
+      if(ward) {
+        header = ward.includes('/') ? `${ward} ${bed}`.trim() : `${ward}/${bed}`.trim();
+      }
+      
+      const hashtagLines = hashtags ? hashtags.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(s => s.startsWith('#') ? s : `#${s}`).join('\n') : '';
+      
+      const text = [header, hashtagLines].filter(Boolean).join('\n');
+      copyToClipboard(text, copyHeaderBtn);
+    });
+    
+    copyHeaderHNBtn?.addEventListener('click', () => {
+      const bed = $$('#bed')?.value.trim() || '';
+      const ward = (currentWardName || '').trim();
+      const hn = $$('#hn')?.value.trim() || '';
+      const hashtags = $$('#hashtags')?.value.trim() || '';
+      
+      let header = bed;
+      if(ward) {
+        header = ward.includes('/') ? `${ward} ${bed}`.trim() : `${ward}/${bed}`.trim();
+      }
+      if(hn) {
+        header = `${header} ${hn}`.trim();
+      }
+      
+      const hashtagLines = hashtags ? hashtags.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(s => s.startsWith('#') ? s : `#${s}`).join('\n') : '';
+      
+      const text = [header, hashtagLines].filter(Boolean).join('\n');
+      copyToClipboard(text, copyHeaderHNBtn);
     });
   }
   let changeCb=null;
@@ -3220,6 +3459,295 @@ wwTitle?.addEventListener('change', () => {
 function backFromWW(){ wardWorkPage.style.display='none'; bedContainer.style.display='block'; }
 wardWorkBtn?.addEventListener('click', openWardWork);
 backToBedsFromWW?.addEventListener('click', backFromWW);
+
+// ======================
+// NOTES SECTION
+// ======================
+
+const notesBtn = document.getElementById('notesBtn');
+const notesPage = document.getElementById('notesPage');
+const backToBedsFromNotes = document.getElementById('backToBedsFromNotes');
+const notesTextarea = document.getElementById('notesTextarea');
+// Notes Profile UI elements
+const notesProfileMenuBtn = document.getElementById('notesProfileMenuBtn');
+const notesProfileMenuPanel = document.getElementById('notesProfileMenuPanel');
+const notesCloseProfilePanel = document.getElementById('notesCloseProfilePanel');
+const notesProfileList = document.getElementById('notesProfileList');
+const notesProfNewBtn = document.getElementById('notesProfNewBtn');
+const notesProfDupBtn = document.getElementById('notesProfDupBtn');
+const notesProfRenBtn = document.getElementById('notesProfRenBtn');
+const notesProfDelBtn = document.getElementById('notesProfDelBtn');
+// Notes Rename Modal elements
+const notesRenameModal = document.getElementById('notesRenameModal');
+const notesRenameClose = document.getElementById('notesRenameClose');
+const notesRenameInput = document.getElementById('notesRenameInput');
+const notesRenameCancel = document.getElementById('notesRenameCancel');
+const notesRenameSave = document.getElementById('notesRenameSave');
+
+// Storage keys
+const NOTES_PROFILES_KEY = 'notesProfiles-v1';
+const NOTES_CURRENT_KEY = 'notesCurrent-v1';
+let notesProfiles = {}; // { [id]: { id, name, content } }
+let currentNotesProfileId = null;
+
+function loadNotesProfiles(){
+  try{
+    const raw = localStorage.getItem(NOTES_PROFILES_KEY);
+    notesProfiles = raw ? JSON.parse(raw) : {};
+    currentNotesProfileId = localStorage.getItem(NOTES_CURRENT_KEY);
+    
+    // Create default if empty
+    if(Object.keys(notesProfiles).length === 0){
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-GB').replace(/\//g, '/');
+      const timeStr = now.toTimeString().slice(0,5);
+      const id = 'notes' + Date.now();
+      notesProfiles[id] = {
+        id,
+        name: `Note ${dateStr} ${timeStr}`,
+        content: ''
+      };
+      currentNotesProfileId = id;
+    }
+    
+    // Ensure current is valid
+    if(!currentNotesProfileId || !notesProfiles[currentNotesProfileId]){
+      currentNotesProfileId = Object.keys(notesProfiles)[0];
+    }
+  } catch(e){
+    console.error('Error loading notes profiles:', e);
+    notesProfiles = {};
+    currentNotesProfileId = null;
+  }
+}
+
+function saveNotesProfiles(){
+  try{
+    localStorage.setItem(NOTES_PROFILES_KEY, JSON.stringify(notesProfiles));
+    localStorage.setItem(NOTES_CURRENT_KEY, currentNotesProfileId);
+  } catch(e){
+    console.error('Error saving notes profiles:', e);
+  }
+}
+
+function getCurrentNotesProfile(){
+  if(!currentNotesProfileId || !notesProfiles[currentNotesProfileId]){
+    loadNotesProfiles();
+  }
+  return notesProfiles[currentNotesProfileId];
+}
+
+function renderNotesProfileList(){
+  if(!notesProfileList) return;
+  notesProfileList.innerHTML = '';
+  
+  const sortedIds = Object.keys(notesProfiles).sort((a,b)=> {
+    const nameA = (notesProfiles[a].name||'').toLowerCase();
+    const nameB = (notesProfiles[b].name||'').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+  
+  sortedIds.forEach(id => {
+    const prof = notesProfiles[id];
+    const li = document.createElement('li');
+    li.style.cssText = 'padding:8px 12px; cursor:pointer; border-radius:6px; margin:2px 6px;';
+    if(id === currentNotesProfileId){
+      li.style.backgroundColor = '#e3f2fd';
+      li.style.fontWeight = '600';
+    }
+    li.textContent = prof.name || 'Untitled';
+    li.onclick = () => {
+      if(id !== currentNotesProfileId){
+        saveCurrentNotesContent();
+        currentNotesProfileId = id;
+        saveNotesProfiles();
+        loadCurrentNotesProfile();
+        renderNotesProfileList();
+      }
+      notesProfileMenuPanel.style.display = 'none';
+    };
+    li.onmouseenter = () => { if(id !== currentNotesProfileId) li.style.backgroundColor = '#f5f5f5'; };
+    li.onmouseleave = () => { if(id !== currentNotesProfileId) li.style.backgroundColor = ''; };
+    notesProfileList.appendChild(li);
+  });
+}
+
+function saveCurrentNotesContent(){
+  const prof = getCurrentNotesProfile();
+  if(prof && notesTextarea){
+    prof.content = notesTextarea.value;
+    saveNotesProfiles();
+  }
+}
+
+function loadCurrentNotesProfile(){
+  const prof = getCurrentNotesProfile();
+  if(prof && notesTextarea){
+    notesTextarea.value = prof.content || '';
+    if(notesProfileMenuBtn){
+      notesProfileMenuBtn.textContent = prof.name || 'Document';
+    }
+  }
+}
+
+function openNotes(){
+  bedContainer.style.display='none';
+  profilePage.style.display='none';
+  wardWorkPage.style.display='none';
+  notesPage.style.display='flex';
+  
+  // Load profiles on first open
+  if(!notesProfiles || Object.keys(notesProfiles).length === 0){
+    loadNotesProfiles();
+  }
+  
+  loadCurrentNotesProfile();
+  renderNotesProfileList();
+}
+
+function backFromNotes(){ 
+  saveCurrentNotesContent();
+  notesPage.style.display='none'; 
+  bedContainer.style.display='block'; 
+}
+
+notesBtn?.addEventListener('click', openNotes);
+backToBedsFromNotes?.addEventListener('click', backFromNotes);
+
+// Auto-save on input
+notesTextarea?.addEventListener('input', () => {
+  saveCurrentNotesContent();
+});
+
+// Profile menu toggle
+notesProfileMenuBtn?.addEventListener('click', () => {
+  const isVisible = notesProfileMenuPanel.style.display === 'block';
+  notesProfileMenuPanel.style.display = isVisible ? 'none' : 'block';
+  if(!isVisible) renderNotesProfileList();
+});
+
+notesCloseProfilePanel?.addEventListener('click', () => {
+  notesProfileMenuPanel.style.display = 'none';
+});
+
+// Profile actions
+notesProfNewBtn?.addEventListener('click', () => {
+  saveCurrentNotesContent();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-GB').replace(/\//g, '/');
+  const timeStr = now.toTimeString().slice(0,5);
+  const id = 'notes' + Date.now();
+  notesProfiles[id] = {
+    id,
+    name: `Note ${dateStr} ${timeStr}`,
+    content: ''
+  };
+  currentNotesProfileId = id;
+  saveNotesProfiles();
+  loadCurrentNotesProfile();
+  renderNotesProfileList();
+  notesProfileMenuPanel.style.display = 'none';
+});
+
+notesProfDupBtn?.addEventListener('click', () => {
+  const prof = getCurrentNotesProfile();
+  if(!prof) return;
+  saveCurrentNotesContent();
+  const id = 'notes' + Date.now();
+  notesProfiles[id] = {
+    id,
+    name: prof.name + ' (copy)',
+    content: prof.content
+  };
+  currentNotesProfileId = id;
+  saveNotesProfiles();
+  loadCurrentNotesProfile();
+  renderNotesProfileList();
+  notesProfileMenuPanel.style.display = 'none';
+});
+
+notesProfRenBtn?.addEventListener('click', () => {
+  const prof = getCurrentNotesProfile();
+  if(!prof) return;
+  notesRenameInput.value = prof.name || '';
+  notesRenameModal.style.display = 'flex';
+  notesProfileMenuPanel.style.display = 'none';
+  setTimeout(() => notesRenameInput?.focus(), 100);
+});
+
+notesProfDelBtn?.addEventListener('click', () => {
+  const prof = getCurrentNotesProfile();
+  if(!prof) return;
+  if(!confirm(`Delete "${prof.name}"?`)) return;
+  
+  delete notesProfiles[currentNotesProfileId];
+  
+  // Switch to another profile or create new one
+  const remaining = Object.keys(notesProfiles);
+  if(remaining.length > 0){
+    currentNotesProfileId = remaining[0];
+  } else {
+    // Create a new default profile
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-GB').replace(/\//g, '/');
+    const timeStr = now.toTimeString().slice(0,5);
+    const id = 'notes' + Date.now();
+    notesProfiles[id] = {
+      id,
+      name: `Note ${dateStr} ${timeStr}`,
+      content: ''
+    };
+    currentNotesProfileId = id;
+  }
+  
+  saveNotesProfiles();
+  loadCurrentNotesProfile();
+  renderNotesProfileList();
+  notesProfileMenuPanel.style.display = 'none';
+});
+
+// Rename modal
+notesRenameClose?.addEventListener('click', () => {
+  notesRenameModal.style.display = 'none';
+});
+
+notesRenameCancel?.addEventListener('click', () => {
+  notesRenameModal.style.display = 'none';
+});
+
+notesRenameSave?.addEventListener('click', () => {
+  const prof = getCurrentNotesProfile();
+  if(!prof) return;
+  const newName = notesRenameInput.value.trim();
+  if(!newName) return;
+  
+  prof.name = newName;
+  saveNotesProfiles();
+  loadCurrentNotesProfile();
+  renderNotesProfileList();
+  notesRenameModal.style.display = 'none';
+});
+
+notesRenameInput?.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    notesRenameSave?.click();
+  } else if(e.key === 'Escape'){
+    notesRenameModal.style.display = 'none';
+  }
+});
+
+// Close modal on backdrop click
+notesRenameModal?.addEventListener('click', (e) => {
+  if(e.target === notesRenameModal){
+    notesRenameModal.style.display = 'none';
+  }
+});
+
+// ======================
+// END NOTES SECTION
+// ======================
+
 
 function refreshWWSuggestions(){
   // Populate global ward names
