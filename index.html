@@ -1234,7 +1234,6 @@ function renderBeds(){
       touchStartEl = div;
       willStartDrag = true;
       const t=e.touches[0]; if(!t) return;
-      // Store coordinates instead of touch object (Android Chrome compatibility)
       const touchX = t.clientX;
       const touchY = t.clientY;
       lpStart={x:touchX, y:touchY};
@@ -1242,64 +1241,48 @@ function renderBeds(){
       clearTimeout(longPressTimer);
       
       longPressTimer=setTimeout(()=>{ 
-        if(!willStartDrag) return; // Cancelled by movement
-        console.log('Long press timer fired, starting drag');
-        // Create a synthetic touch object with stored coordinates
+        if(!willStartDrag) return;
         const syntheticTouch = {clientX: touchX, clientY: touchY};
         startMobileDrag(bedIds, ward.id, syntheticTouch); 
       }, LONG_PRESS_MS);
-    }, {passive:false}); // Changed to false so we can preventDefault if needed
+    }, {passive:false});
     div.addEventListener('touchmove',(e)=>{
       const t=e.touches[0]; if(!t) return;
-      console.log('touchmove on bed div:', {mobileDrag: !!mobileDrag, willStartDrag, x: t.clientX, y: t.clientY});
       
-      // During long-press wait period
       if(!mobileDrag){
         const dx=Math.abs(t.clientX-lpStart.x), dy=Math.abs(t.clientY-lpStart.y);
         
-        // If moved significantly, cancel long-press and allow scrolling
         if(dx>MOVE_CANCEL_PX || dy>MOVE_CANCEL_PX){ 
           clearTimeout(longPressTimer); 
           willStartDrag = false;
-          console.log('Long press cancelled due to movement - allowing scroll');
-          return; // let scroll proceed
+          return;
         }
         
-        // If barely moved (holding still for long-press), prevent default to avoid touchcancel
         if(willStartDrag) {
-          console.log('Holding still during long-press wait - preventing default');
           e.preventDefault();
         }
         return;
       }
       
-      // During actual drag - prevent defaults but DON'T stop propagation
-      console.log('Dragging on bed div - calling updateMobileDrag');
       e.preventDefault();
       updateMobileDrag(t);
     }, {passive:false});
     div.addEventListener('touchend',(e)=>{
-      console.log('touchend on bed div', {mobileDrag: !!mobileDrag, touchStartEl: touchStartEl === div});
       clearTimeout(longPressTimer);
       const t=e.changedTouches[0]; 
       if(mobileDrag && t && touchStartEl === div){ 
-        console.log('Calling endMobileDrag from bed div');
         e.preventDefault();
-        // REMOVED e.stopPropagation() to allow global handlers to work
         endMobileDrag(t); 
       }
       touchStartEl = null;
     }, {passive:false});
     div.addEventListener('touchcancel',(e)=>{ 
-      console.log('touchcancel on bed div - drag cancelled by browser');
       clearTimeout(longPressTimer); 
       if(mobileDrag){ 
         mobileDrag.ghost.remove(); 
         mobileDrag=null; 
         clearWardOver();
-        // Remove class to restore normal behavior
         document.body.classList.remove('dragging-bed');
-        console.log('Removed dragging-bed class after cancel');
       }
       touchStartEl = null;
     });
@@ -1364,10 +1347,7 @@ let longPressTimer=null, lpStart={x:0,y:0};
 const LONG_PRESS_MS=300, MOVE_CANCEL_PX=10;
 function getWardAtPoint(x,y){
   const ul=document.getElementById('wardList'); 
-  if(!ul) {
-    console.log('wardList not found');
-    return null;
-  }
+  if(!ul) return null;
   let target=null;
   const wards = ul.querySelectorAll('li');
   wards.forEach(li=>{
@@ -1376,28 +1356,21 @@ function getWardAtPoint(x,y){
       target=li; 
     }
   });
-  if(target) {
-    console.log('getWardAtPoint found ward:', target.textContent.substring(0, 25), 'at', x, y);
-  }
   return target;
 }
 function clearWardOver(){ document.querySelectorAll('#wardList li.over').forEach(li=> li.classList.remove('over')); }
 
 // Global touch handlers for mobile drag (Android Chrome compatibility)
 let globalTouchMoveHandler = (e) => {
-  console.log('Global touchmove handler called, mobileDrag:', !!mobileDrag);
   if(!mobileDrag) return;
   const t = e.touches[0];
   if(!t) return;
-  console.log('Global touchmove during drag at', t.clientX, t.clientY);
   e.preventDefault();
   updateMobileDrag(t);
 };
 
 let globalTouchEndHandler = (e) => {
-  console.log('Global touchend handler called, mobileDrag:', !!mobileDrag);
   if(!mobileDrag) return;
-  console.log('Global touchend during drag');
   const t = e.changedTouches[0];
   if(t) {
     e.preventDefault();
@@ -1405,16 +1378,12 @@ let globalTouchEndHandler = (e) => {
   }
 };
 
-console.log('Adding global touch handlers');
 document.addEventListener('touchmove', globalTouchMoveHandler, {passive: false});
 document.addEventListener('touchend', globalTouchEndHandler, {passive: false});
 
 function startMobileDrag(bedIds, fromWardId, touch){
-  console.log('startMobileDrag called', {bedIds, fromWardId, x: touch.clientX, y: touch.clientY});
-  
   // CRITICAL: Add class to disable all touch actions and prevent scrolling
   document.body.classList.add('dragging-bed');
-  console.log('Added dragging-bed class to body');
   
   // create ghost near finger
   const ghost=document.createElement('div');
@@ -1423,9 +1392,6 @@ function startMobileDrag(bedIds, fromWardId, touch){
   ghost.style.background='rgba(0,0,0,0.85)'; ghost.style.color='#fff'; ghost.style.padding='8px 12px'; ghost.style.borderRadius='8px'; ghost.style.fontSize='14px'; ghost.style.fontWeight='600'; ghost.style.pointerEvents='none'; ghost.style.zIndex='99999'; ghost.style.boxShadow='0 6px 14px rgba(0,0,0,0.35)';
   document.body.appendChild(ghost);
   mobileDrag={ ghost, bedIds, fromWardId };
-  console.log('mobileDrag set:', mobileDrag);
-  // Add haptic feedback if available
-  if(navigator.vibrate) navigator.vibrate(50);
   // prevent bed click opening editor shortly after drag
   try{ if(performance && performance.now) suppressBedClickUntil = performance.now() + 600; }catch{}
 }
@@ -1438,7 +1404,6 @@ function updateMobileDrag(touch){
   const li=getWardAtPoint(touch.clientX, touch.clientY); 
   if(li) {
     li.classList.add('over');
-    console.log('Hovering over ward:', li.textContent.substring(0, 30), 'ID:', li.dataset.wardId);
   }
 }
 function endMobileDrag(touch){
@@ -1449,26 +1414,14 @@ function endMobileDrag(touch){
   
   // CRITICAL: Remove class to re-enable touch actions and scrolling
   document.body.classList.remove('dragging-bed');
-  console.log('Removed dragging-bed class from body');
-  
-  console.log('endMobileDrag called', {x: touch.clientX, y: touch.clientY, bedIds, fromWardId});
   
   const li=getWardAtPoint(touch.clientX, touch.clientY);
-  console.log('Ward found:', li, li?.dataset?.wardId);
   
   if(li){
     const targetWardId = li.dataset.wardId;
-    console.log('Target ward ID:', targetWardId, 'From ward ID:', fromWardId);
     if(targetWardId && targetWardId !== fromWardId){ 
-      console.log('Moving beds:', bedIds, 'from', fromWardId, 'to', targetWardId);
       moveBedsBetweenWards(bedIds, fromWardId, currentProfileId, targetWardId, currentProfileId);
-      // Visual confirmation
-      if(navigator.vibrate) navigator.vibrate(100);
-    } else {
-      console.log('Same ward or no target');
     }
-  } else {
-    console.log('No ward found at touch point');
   }
   mobileDrag=null;
 }
