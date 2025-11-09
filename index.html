@@ -1220,7 +1220,11 @@ function renderBeds(){
     div.addEventListener('click',(ev)=>{
       if(performance && performance.now && performance.now() < suppressBedClickUntil) return;
       if(ev.target.closest('button')) return; // buttons handle their own click
-      if(selectionMode){ toggleBedSelection(b.id, div); }
+      if(selectionMode){ 
+        // In selection mode, clicking anywhere (including checkbox) toggles selection
+        toggleBedSelection(b.id, div); 
+        ev.preventDefault(); // Prevent checkbox from toggling twice
+      }
       else openProfilePage(b);
     });
 
@@ -1240,7 +1244,7 @@ function renderBeds(){
       }
       
       // Don't interfere with button/checkbox/input interactions
-      if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('button') || e.target.closest('input')) {
+      if(e.target.tagName === 'BUTTON' || e.target.closest('button')) {
         return;
       }
       
@@ -1297,10 +1301,17 @@ function renderBeds(){
     div.addEventListener('touchend',(e)=>{
       clearTimeout(longPressTimer);
       const t=e.changedTouches[0]; 
+      
       if(mobileDrag && t && touchStartEl === div){ 
         e.preventDefault();
         endMobileDrag(t); 
+      } else if(selectionMode && willStartDrag && touchStartEl === div) {
+        // Quick tap without long-press in selection mode - toggle selection
+        e.preventDefault();
+        toggleBedSelection(b.id, div);
       }
+      
+      willStartDrag = false;
       touchStartEl = null;
     }, {passive:false});
     div.addEventListener('touchcancel',(e)=>{ 
@@ -1320,7 +1331,8 @@ function renderBeds(){
   const selectBox=document.createElement('input');
   selectBox.type='checkbox'; selectBox.className='select-box'; selectBox.style.display= selectionMode? 'inline-block':'none';
   selectBox.checked = selectedBedIds.has(b.id);
-  selectBox.addEventListener('click', (e)=>{ e.stopPropagation(); toggleBedSelection(b.id, div, e.target.checked); });
+  // Checkbox click is handled by the bed div click handler, just prevent default checkbox behavior
+  selectBox.addEventListener('click', (e)=>{ e.preventDefault(); });
     const moveBtn=document.createElement('button');
     moveBtn.textContent='Move';
     moveBtn.onclick=(e)=>{ e.stopPropagation(); openMoveBedModal({ bedId: b.id, fromWardId: ward.id, fromProfileId: currentProfileId }); };
