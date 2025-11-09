@@ -1328,15 +1328,15 @@ function getWardAtPoint(x,y){
   }
   let target=null;
   const wards = ul.querySelectorAll('li');
-  console.log('Checking', wards.length, 'wards at point', x, y);
   wards.forEach(li=>{
     const r=li.getBoundingClientRect();
-    console.log('Ward:', li.textContent.substring(0, 20), 'Rect:', {left: r.left, right: r.right, top: r.top, bottom: r.bottom});
     if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom){ 
       target=li; 
-      console.log('Found ward at point!');
     }
   });
+  if(target) {
+    console.log('getWardAtPoint found ward:', target.textContent.substring(0, 25), 'at', x, y);
+  }
   return target;
 }
 function clearWardOver(){ document.querySelectorAll('#wardList li.over').forEach(li=> li.classList.remove('over')); }
@@ -1357,8 +1357,15 @@ function startMobileDrag(bedIds, fromWardId, touch){
 }
 function updateMobileDrag(touch){
   if(!mobileDrag) return;
-  const {ghost}=mobileDrag; ghost.style.left=(touch.clientX+8)+'px'; ghost.style.top=(touch.clientY+8)+'px';
-  clearWardOver(); const li=getWardAtPoint(touch.clientX, touch.clientY); if(li) li.classList.add('over');
+  const {ghost}=mobileDrag; 
+  ghost.style.left=(touch.clientX+8)+'px'; 
+  ghost.style.top=(touch.clientY+8)+'px';
+  clearWardOver(); 
+  const li=getWardAtPoint(touch.clientX, touch.clientY); 
+  if(li) {
+    li.classList.add('over');
+    console.log('Hovering over ward:', li.textContent.substring(0, 30), 'ID:', li.dataset.wardId);
+  }
 }
 function endMobileDrag(touch){
   if(!mobileDrag) return;
