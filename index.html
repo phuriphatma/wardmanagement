@@ -637,7 +637,8 @@ body.collapsed #expandSidebarBtn{display:none}
         <div style="color:#666;font-size:12px;margin-top:4px;">Free text for personal notes</div>
       </header>
       <section class="card" style="max-width:720px;">
-        <textarea id="notesTextarea" rows="30" style="width:100%;min-height:600px;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;font-size:14px;line-height:1.5;resize:vertical;" placeholder="Type your notes here..."></textarea>
+        <div id="notesEditableContent" contenteditable="true" style="min-height:600px;max-height:600px;overflow-y:auto;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;font-size:14px;line-height:1.5;white-space:pre-wrap;outline:none;border:1px solid #ddd;border-radius:4px;" spellcheck="false"></div>
+        <textarea id="notesTextarea" style="display:none;"></textarea>
       </section>
       <!-- Notes Rename Modal -->
       <div id="notesRenameModal" class="modal">
@@ -3728,6 +3729,8 @@ function loadCurrentNotesProfile(){
     if(notesProfileMenuBtn){
       notesProfileMenuBtn.textContent = prof.name || 'Document';
     }
+    // Re-render the editable content from textarea
+    renderNotesContent();
   }
 }
 
@@ -3754,6 +3757,7 @@ function openNotes(){
   
   loadCurrentNotesProfile();
   renderNotesProfileList();
+  renderNotesContent();
 }
 
 function backFromNotes(){ 
@@ -3766,9 +3770,378 @@ function backFromNotes(){
 notesBtn?.addEventListener('click', openNotes);
 backToBedsFromNotes?.addEventListener('click', backFromNotes);
 
-// Auto-save on input
-notesTextarea?.addEventListener('input', () => {
+// Simple contentEditable with clickable checkboxes
+const notesEditableContent = document.getElementById('notesEditableContent');
+
+// Track if keyboard is currently visible
+let notesKeyboardVisible = false;
+
+// Update keyboard visibility when focus/blur happens
+notesEditableContent?.addEventListener('focus', () => {
+  // Focus means keyboard will appear
+  setTimeout(() => {
+    notesKeyboardVisible = true;
+  }, 300); // Give keyboard time to appear
+});
+
+notesEditableContent?.addEventListener('blur', () => {
+  notesKeyboardVisible = false;
+});
+
+// Detect keyboard hiding on mobile (Android back button doesn't trigger blur)
+// When keyboard hides, viewport height increases
+if (notesEditableContent) {
+  let lastHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  
+  const checkKeyboardHidden = () => {
+    const currentHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    
+    // If viewport height increased significantly (>100px), keyboard was hidden
+    if (currentHeight > lastHeight + 100) {
+      notesKeyboardVisible = false;
+    }
+    // If viewport height decreased significantly, keyboard appeared
+    else if (currentHeight < lastHeight - 100) {
+      notesKeyboardVisible = true;
+    }
+    
+    lastHeight = currentHeight;
+  };
+  
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', checkKeyboardHidden);
+  } else {
+    window.addEventListener('resize', checkKeyboardHidden);
+  }
+}
+
+// Render initial content with clickable checkboxes
+function renderNotesContent() {
+  if (!notesTextarea || !notesEditableContent) return;
+  
+  const text = notesTextarea.value;
+  const lines = text.split('\n');
+  
+  notesEditableContent.innerHTML = '';
+  
+  lines.forEach(line => {
+    const lineDiv = document.createElement('div');
+    
+    // Empty line - add br to preserve it
+    if (line === '') {
+      lineDiv.appendChild(document.createElement('br'));
+    }
+    // Check if line starts with checkbox
+    else if (line.match(/^(⭕️|⭕|✅)\s*/)) {
+      const match = line.match(/^(⭕️|⭕|✅)\s*/);
+      const checkbox = match[0];
+      const isChecked = checkbox.includes('✅');
+      const restOfLine = line.substring(match[0].length);
+      
+      // Create clickable checkbox span that preserves exact spacing
+      const checkboxSpan = document.createElement('span');
+      // Keep the exact match to preserve spacing
+      checkboxSpan.textContent = isChecked ? match[0] : match[0].replace(/✅/, '⭕️').replace(/⭕/, '⭕️');
+      checkboxSpan.contentEditable = 'false';
+      checkboxSpan.style.cursor = 'pointer';
+      checkboxSpan.style.userSelect = 'none';
+      checkboxSpan.style.display = 'inline';
+      
+      checkboxSpan.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Prevent keyboard from showing
+        notesEditableContent.blur();
+        // Toggle based on current textContent
+        const currentlyChecked = checkboxSpan.textContent.includes('✅');
+        if (currentlyChecked) {
+          checkboxSpan.textContent = checkboxSpan.textContent.replace('✅', '⭕️');
+        } else {
+          checkboxSpan.textContent = checkboxSpan.textContent.replace(/⭕️|⭕/, '✅');
+        }
+        syncToTextarea();
+      };
+      
+      lineDiv.appendChild(checkboxSpan);
+      lineDiv.appendChild(document.createTextNode(restOfLine));
+    } else {
+      lineDiv.textContent = line;
+    }
+    
+    notesEditableContent.appendChild(lineDiv);
+  });
+}
+
+// Sync from contentEditable back to textarea
+function syncToTextarea() {
+  if (!notesEditableContent || !notesTextarea) return;
+  
+  const lines = [];
+  notesEditableContent.childNodes.forEach(node => {
+    if (node.nodeName === 'DIV') {
+      let lineText = '';
+      node.childNodes.forEach(child => {
+        lineText += child.textContent || '';
+      });
+      lines.push(lineText);
+    } else if (node.nodeName === '#text') {
+      // Handle direct text nodes
+      const text = node.textContent || '';
+      if (text) lines.push(text);
+    } else if (node.nodeName === 'BR') {
+      // Handle line breaks
+      lines.push('');
+    }
+  });
+  
+  notesTextarea.value = lines.join('\n');
   saveCurrentNotesContent();
+}
+
+// Convert checkbox text to clickable spans without full re-render
+function makeCheckboxesClickable(shouldNormalize = false) {
+  if (!notesEditableContent) return;
+  
+  // Only normalize structure on paste, not on regular typing
+  if (shouldNormalize) {
+    normalizeContentStructure();
+  }
+  
+  // Find all DIVs and check for checkboxes at the start
+  const divs = notesEditableContent.querySelectorAll('div');
+  divs.forEach(div => {
+    // Skip if already has a checkbox span
+    if (div.querySelector('.checkbox-toggle')) return;
+    
+    // Get the first text content (might be in nested elements)
+    let firstTextNode = null;
+    let textContent = '';
+    
+    // Walk through to find first text
+    function findFirstText(node) {
+      if (firstTextNode) return;
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+        firstTextNode = node;
+        textContent = node.textContent;
+        return;
+      }
+      if (node.childNodes) {
+        for (let child of node.childNodes) {
+          findFirstText(child);
+          if (firstTextNode) return;
+        }
+      }
+    }
+    
+    findFirstText(div);
+    
+    if (!firstTextNode) return;
+    
+    const match = textContent.match(/^(⭕️|⭕|✅)\s*/);
+    
+    if (match) {
+      const checkbox = match[0];
+      const restOfText = textContent.substring(match[0].length);
+      
+      // Create clickable checkbox span
+      const checkboxSpan = document.createElement('span');
+      checkboxSpan.textContent = match[0];
+      checkboxSpan.contentEditable = 'false';
+      checkboxSpan.style.cursor = 'pointer';
+      checkboxSpan.style.userSelect = 'none';
+      checkboxSpan.style.display = 'inline';
+      checkboxSpan.className = 'checkbox-toggle';
+      
+      // Prevent touch from focusing the contentEditable
+      checkboxSpan.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+      }, { passive: true });
+      
+      // Prevent mousedown from focusing
+      checkboxSpan.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      
+      checkboxSpan.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Save keyboard state BEFORE toggling
+        const keyboardWasVisible = notesKeyboardVisible;
+        
+        // Toggle checkbox immediately
+        const currentlyChecked = checkboxSpan.textContent.includes('✅');
+        if (currentlyChecked) {
+          checkboxSpan.textContent = checkboxSpan.textContent.replace('✅', '⭕️');
+        } else {
+          checkboxSpan.textContent = checkboxSpan.textContent.replace(/⭕️|⭕/, '✅');
+        }
+        
+        // Sync to textarea
+        setTimeout(() => {
+          syncToTextarea();
+        }, 0);
+        
+        // Manage keyboard visibility after toggle
+        if (!keyboardWasVisible) {
+          // Keyboard was hidden - keep it hidden
+          if (document.activeElement === notesEditableContent) {
+            notesEditableContent.blur();
+          }
+        } else {
+          // Keyboard was visible - keep it visible by restoring focus
+          if (document.activeElement !== notesEditableContent) {
+            notesEditableContent.focus();
+          }
+        }
+      };
+      
+      // Replace the text node
+      firstTextNode.textContent = restOfText;
+      
+      // Insert checkbox at the very beginning of the div
+      if (div.firstChild) {
+        div.insertBefore(checkboxSpan, div.firstChild);
+      } else {
+        div.appendChild(checkboxSpan);
+      }
+    }
+  });
+}
+
+// Normalize content structure to ensure everything is in DIVs
+function normalizeContentStructure() {
+  if (!notesEditableContent) return;
+  
+  const children = Array.from(notesEditableContent.childNodes);
+  const newChildren = [];
+  
+  children.forEach(child => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      // Wrap text nodes in DIVs, splitting by newlines
+      const lines = child.textContent.split('\n');
+      lines.forEach(line => {
+        const div = document.createElement('div');
+        if (line === '') {
+          div.appendChild(document.createElement('br'));
+        } else {
+          div.textContent = line;
+        }
+        newChildren.push(div);
+      });
+    } else if (child.nodeName === 'BR') {
+      // Convert BR to empty DIV
+      const div = document.createElement('div');
+      div.appendChild(document.createElement('br'));
+      newChildren.push(div);
+    } else if (child.nodeName === 'DIV') {
+      // Check if DIV itself contains newlines in its text content
+      const textContent = child.textContent;
+      if (textContent.includes('\n')) {
+        // Split this DIV into multiple DIVs
+        const lines = textContent.split('\n');
+        lines.forEach(line => {
+          const div = document.createElement('div');
+          if (line === '') {
+            div.appendChild(document.createElement('br'));
+          } else {
+            div.textContent = line;
+          }
+          newChildren.push(div);
+        });
+      } else {
+        // Keep DIV as is
+        newChildren.push(child);
+      }
+    } else {
+      // Wrap other elements in DIV
+      const div = document.createElement('div');
+      div.appendChild(child.cloneNode(true));
+      newChildren.push(div);
+    }
+  });
+  
+  // Always update to ensure consistent structure
+  if (newChildren.length > 0) {
+    notesEditableContent.innerHTML = '';
+    newChildren.forEach(child => notesEditableContent.appendChild(child));
+  }
+}
+
+// Save on input (typing, pasting, etc.)
+notesEditableContent?.addEventListener('input', () => {
+  // Sync immediately to save content
+  clearTimeout(window.notesSyncTimer);
+  window.notesSyncTimer = setTimeout(() => {
+    syncToTextarea();
+  }, 300);
+  
+  // Convert checkboxes to clickable spans immediately (without normalizing)
+  clearTimeout(window.notesCheckboxTimer);
+  window.notesCheckboxTimer = setTimeout(() => {
+    makeCheckboxesClickable(false); // Don't normalize on regular typing
+  }, 100);
+});
+
+// Handle paste events - process immediately
+notesEditableContent?.addEventListener('paste', (e) => {
+  // Let the paste happen first, then process with cursor preservation
+  setTimeout(() => {
+    // Save cursor position
+    const selection = window.getSelection();
+    let cursorOffset = 0;
+    
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const preRange = range.cloneRange();
+      preRange.selectNodeContents(notesEditableContent);
+      preRange.setEnd(range.startContainer, range.startOffset);
+      cursorOffset = preRange.toString().length;
+    }
+    
+    // Process the pasted content WITH normalization
+    makeCheckboxesClickable(true);
+    syncToTextarea();
+    
+    // Restore cursor
+    if (cursorOffset >= 0) {
+      try {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        let charCount = 0;
+        let found = false;
+        
+        function findPosition(node) {
+          if (found) return;
+          if (node.nodeType === Node.TEXT_NODE) {
+            if (charCount + node.length >= cursorOffset) {
+              range.setStart(node, cursorOffset - charCount);
+              range.collapse(true);
+              found = true;
+              return;
+            }
+            charCount += node.length;
+          } else if (node.childNodes) {
+            for (let child of node.childNodes) {
+              findPosition(child);
+              if (found) return;
+            }
+            if (node.nodeName === 'DIV') charCount += 1;
+          }
+        }
+        
+        findPosition(notesEditableContent);
+        
+        if (found) {
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } catch (e) {
+        console.log('Paste cursor restore error:', e);
+      }
+    }
+  }, 20); // Quick but give browser time to insert content
 });
 
 // Profile menu toggle
