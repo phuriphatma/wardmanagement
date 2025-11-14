@@ -616,7 +616,10 @@ body.collapsed #expandSidebarBtn{display:none}
       <button id="backToBedsFromNotes" style="margin-bottom:12px;">← Back</button>
       <header>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <h2 style="margin:0;">Notes</h2>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <h2 style="margin:0;">Notes</h2>
+            <button id="notesCopyBtn" class="ghost" title="Copy all text" style="font-size:20px;padding:4px 8px;">📋</button>
+          </div>
           <div id="notesProfilesMenu" style="position:relative;">
             <button id="notesProfileMenuBtn" class="ghost" style="border:1px solid #ddd; padding:6px 10px; border-radius:6px;">Document</button>
             <div id="notesProfileMenuPanel" style="display:none; position:absolute; right:0; top:100%; margin-top:6px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,0.1); width:280px; max-height:60vh; overflow:auto; z-index:50;">
@@ -3619,6 +3622,7 @@ const notesProfNewBtn = document.getElementById('notesProfNewBtn');
 const notesProfDupBtn = document.getElementById('notesProfDupBtn');
 const notesProfRenBtn = document.getElementById('notesProfRenBtn');
 const notesProfDelBtn = document.getElementById('notesProfDelBtn');
+const notesCopyBtn = document.getElementById('notesCopyBtn');
 // Notes Rename Modal elements
 const notesRenameModal = document.getElementById('notesRenameModal');
 const notesRenameClose = document.getElementById('notesRenameClose');
@@ -4229,6 +4233,50 @@ notesProfDelBtn?.addEventListener('click', () => {
   loadCurrentNotesProfile();
   renderNotesProfileList();
   notesProfileMenuPanel.style.display = 'none';
+});
+
+// Copy button - copy all notes text to clipboard
+notesCopyBtn?.addEventListener('click', async () => {
+  if (!notesTextarea) return;
+  
+  const text = notesTextarea.value;
+  
+  if (!text) {
+    // Just show visual feedback, no alert
+    notesCopyBtn.textContent = '⚠️';
+    setTimeout(() => {
+      notesCopyBtn.textContent = '📋';
+    }, 1000);
+    return;
+  }
+  
+  try {
+    await navigator.clipboard.writeText(text);
+    
+    // Visual feedback - just change icon
+    notesCopyBtn.textContent = '✅';
+    notesCopyBtn.style.color = '#22c55e';
+    
+    setTimeout(() => {
+      notesCopyBtn.textContent = '📋';
+      notesCopyBtn.style.color = '';
+    }, 1500);
+  } catch (err) {
+    // Fallback for older browsers
+    notesTextarea.style.display = 'block';
+    notesTextarea.select();
+    document.execCommand('copy');
+    notesTextarea.style.display = 'none';
+    
+    // Visual feedback only
+    notesCopyBtn.textContent = '✅';
+    notesCopyBtn.style.color = '#22c55e';
+    
+    setTimeout(() => {
+      notesCopyBtn.textContent = '📋';
+      notesCopyBtn.style.color = '';
+    }, 1500);
+  }
 });
 
 // Rename modal
