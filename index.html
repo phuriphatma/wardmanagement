@@ -695,15 +695,14 @@ body.collapsed #expandSidebarBtn{display:none}
     #sidebarBackdrop{ position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:1400; transition:opacity .2s; }
     body.collapsed #sidebarBackdrop{ opacity:0; pointer-events:none; }
 
-    /* Hamburger reveals the sidebar */
-    #expandSidebarBtn{ display:flex !important; align-items:center; justify-content:center;
-      width:44px; height:44px; top:10px; left:10px; border-radius:12px; font-size:22px; padding:0;
-      background:var(--surface); border:1px solid var(--line-2); color:var(--ink); box-shadow:var(--sh); z-index:1300; line-height:1; }
-    body:not(.collapsed) #expandSidebarBtn{ display:none !important; }
+    /* The top-left hamburger is replaced by the "More" tab on phones */
+    #expandSidebarBtn{ display:none !important; }
+    /* Quick / Work / Notes now live in the bottom bar — drop them from the sidebar */
+    #quickIOBtn, #wardWorkBtn, #notesBtn{ display:none !important; }
 
-    /* Full-width content with comfortable spacing; leave room for hamburger */
-    #bedContainer{ padding:14px 16px 36px; }
-    #bedContainer .bed-head{ padding-left:54px; min-height:44px; align-items:center; }
+    /* Full-width content with comfortable spacing */
+    #bedContainer{ padding:16px 16px 96px; }
+    #bedContainer .bed-head{ min-height:44px; align-items:center; }
     #wardTitle{ font-size:20px; }
     .bed-toolbar{ gap:10px; margin-bottom:12px; }
     #bedList{ gap:12px; }
@@ -711,11 +710,27 @@ body.collapsed #expandSidebarBtn{display:none}
     #bedList .bed-text .line1{ font-size:16px; }
     #bedList .bed-text .line2{ font-size:14px; }
     /* sub-pages */
-    #wardWorkPage,#notesPage{ padding:14px 16px 140px !important; }
-    #profilePage{ padding:14px 16px !important; }
-    #backToBedsFromWW,#backToBedsFromNotes,#backToBedsBtn{ margin-left:54px; }
+    #wardWorkPage{ padding:16px 16px 140px !important; }
+    #notesPage{ padding:16px 16px 110px !important; }
+    #profilePage{ padding:16px 16px !important; }
+
+    /* ---- Bottom tab bar ---- */
+    #mobileTabBar{ position:fixed; left:0; right:0; bottom:0; z-index:1200; display:flex;
+      background:rgba(255,255,255,.97); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+      border-top:1px solid var(--line); box-shadow:0 -6px 20px rgba(15,23,42,.08);
+      padding-bottom:env(safe-area-inset-bottom, 0px); }
+    #mobileTabBar button{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+      min-height:58px; border:none; background:none; color:var(--muted); font-size:11px; font-weight:600; cursor:pointer; padding:7px 2px 6px; }
+    #mobileTabBar .mt-ico{ font-size:21px; line-height:1; }
+    #mobileTabBar button.active{ color:var(--primary); }
+    #mobileTabBar button.mt-primary .mt-ico{ width:50px; height:30px; display:grid; place-items:center;
+      background:var(--primary); color:#fff; border-radius:999px; box-shadow:0 4px 12px rgba(37,99,235,.4); }
+    #mobileTabBar button.mt-primary{ color:var(--primary); }
+    /* Hide the bar on the editor pages that own the bottom Preview panel */
+    body[data-view="quick"] #mobileTabBar, body[data-view="work"] #mobileTabBar{ display:none; }
   }
-  @media (min-width: 769px){ #sidebarBackdrop{ display:none !important; } }
+  #mobileTabBar{ display:none; }  /* hidden on desktop */
+  @media (min-width: 769px){ #sidebarBackdrop{ display:none !important; } #mobileTabBar{ display:none !important; } }
 </style>
 <!-- SheetJS for parsing XLSX tab names -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -1101,6 +1116,15 @@ body.collapsed #expandSidebarBtn{display:none}
   </div>
   <button id="expandSidebarBtn">&#9776;</button>
 </div>
+
+<!-- Mobile bottom navigation (phones only) -->
+<nav id="mobileTabBar" aria-label="Main navigation">
+  <button type="button" data-tab="beds"><span class="mt-ico">🛏️</span><span class="mt-label">Beds</span></button>
+  <button type="button" data-tab="work"><span class="mt-ico">📋</span><span class="mt-label">Work</span></button>
+  <button type="button" data-tab="quick" class="mt-primary"><span class="mt-ico">⚡</span><span class="mt-label">Quick</span></button>
+  <button type="button" data-tab="notes"><span class="mt-ico">📝</span><span class="mt-label">Notes</span></button>
+  <button type="button" data-tab="more"><span class="mt-ico">☰</span><span class="mt-label">More</span></button>
+</nav>
 
 <!-- Presets Modal -->
 <div id="presetsModal" class="modal">
@@ -2273,6 +2297,44 @@ document.getElementById('expandSidebarBtn').onclick=()=>document.body.classList.
   });
   // If the window crosses the breakpoint (e.g. rotate), keep state sensible
   window.addEventListener('resize', ()=>{ if(!isPhone()) document.body.classList.remove('collapsed'); });
+})();
+
+/* Mobile bottom tab bar: drives navigation and reflects the current view.
+   Uses local element refs (the outer consts aren't initialised yet here) and
+   calls the hoisted nav functions. A MutationObserver keeps the active tab and
+   bar visibility correct no matter how the view changed (tab, ward tap, Back). */
+(function(){
+  const bar=document.getElementById('mobileTabBar');
+  if(!bar) return;
+  const profileEl=document.getElementById('profilePage');
+  const wwEl=document.getElementById('wardWorkPage');
+  const notesEl=document.getElementById('notesPage');
+  const bedsEl=document.getElementById('bedContainer');
+  function currentView(){
+    if(profileEl && profileEl.style.display==='flex') return 'quick';
+    if(wwEl && wwEl.style.display==='flex') return 'work';
+    if(notesEl && notesEl.style.display==='flex') return 'notes';
+    return 'beds';
+  }
+  function sync(){
+    const v=currentView();
+    document.body.dataset.view=v;
+    bar.querySelectorAll('button').forEach(b=> b.classList.toggle('active', b.dataset.tab===v));
+  }
+  bar.addEventListener('click', (e)=>{
+    const btn=e.target.closest('button'); if(!btn) return;
+    const tab=btn.dataset.tab;
+    if(tab==='beds') backToBeds();
+    else if(tab==='work'){ if(currentView()!=='work') openWardWork(); }
+    else if(tab==='quick') openDraftNote();
+    else if(tab==='notes'){ if(currentView()!=='notes') openNotes(); }
+    else if(tab==='more'){ document.body.classList.toggle('collapsed'); }
+    setTimeout(sync, 0);
+  });
+  [bedsEl, wwEl, notesEl, profileEl].forEach(el=>{
+    if(el) new MutationObserver(sync).observe(el, {attributes:true, attributeFilter:['style']});
+  });
+  sync();
 })();
 
 /* Swipe to hide/show sidebar.
