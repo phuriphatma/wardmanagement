@@ -652,6 +652,66 @@ body.collapsed #expandSidebarBtn{display:none}
   #wwSnipToggle:hover,#wwCopy:hover,#wwPreviewToggle:hover,#notesCopyBtn:hover,#wwProfileMenuBtn:hover,#notesProfileMenuBtn:hover{ background:var(--surface-2) !important; }
   /* WardWork blocks (ww-block) as clean cards */
   #wwList .ww-block{ border:1px solid var(--line) !important; border-radius:var(--r-lg) !important; background:var(--surface) !important; box-shadow:var(--sh-sm); }
+
+  /* ===================== Touch devices (phones + tablets) =====================
+     Make every tap target comfortably large (~44px) so controls are easy to
+     tell apart and press. */
+  @media (pointer: coarse){
+    .ward-list-head .wl-tools button{ width:44px; height:44px; font-size:20px; }
+    #wardList li{ padding:14px 12px 14px 14px; font-size:15px; }
+    #wardList li .wl-count{ font-size:13px; padding:3px 11px; }
+    .side-nav button{ padding:14px 12px; font-size:15px; }
+    .side-nav .nav-ico{ font-size:18px; }
+    #quickIOBtn{ padding:15px; font-size:16px; }
+    #profileMenuBtn{ padding:13px 14px; font-size:14px; }
+    .controls button{ padding:13px 10px; font-size:14px; }
+    #profileMenuPanel button:not(.ghost),#wwProfileMenuPanel button:not(.ghost),#notesProfileMenuPanel button:not(.ghost){ padding:12px 14px; }
+    #profileList li,#wwProfileList li,#notesProfileList li{ padding:15px 14px; font-size:15px; }
+    #closeProfilePanel,#wwCloseProfilePanel,#notesCloseProfilePanel{ padding:8px 14px; font-size:26px; }
+    .status-filter select{ padding:12px 32px 12px 12px; font-size:15px; }
+    #addBedBtn{ padding:14px 18px; font-size:15px; }
+    .bed-toolbar .btn-sm{ padding:13px 18px; font-size:14px; }
+    #bedList .actions-row button{ padding:12px 16px; font-size:14px; min-height:44px; }
+    .modal button{ padding:13px 16px; min-height:44px; }
+  }
+
+  /* ===================== Phone layout =====================
+     Below ~768px CSS width the old side-by-side layout cramped everything
+     into half the screen. Give the content the FULL width and turn the
+     sidebar into a slide-over opened from a hamburger. */
+  @media (max-width: 768px){
+    #sidebar{ position:fixed; top:0; left:0; bottom:0; width:min(86vw,330px); max-width:330px; z-index:1500;
+      border-right:1px solid var(--line); box-shadow:14px 0 44px rgba(15,23,42,.24);
+      transition:transform .22s ease; }
+    body.collapsed #sidebar{ display:flex; transform:translateX(-106%); }
+    #resizer{ display:none !important; }
+    #main{ width:100%; }
+
+    /* Dim backdrop behind the open sidebar (created in JS) */
+    #sidebarBackdrop{ position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:1400; transition:opacity .2s; }
+    body.collapsed #sidebarBackdrop{ opacity:0; pointer-events:none; }
+
+    /* Hamburger reveals the sidebar */
+    #expandSidebarBtn{ display:flex !important; align-items:center; justify-content:center;
+      width:44px; height:44px; top:10px; left:10px; border-radius:12px; font-size:22px; padding:0;
+      background:var(--surface); border:1px solid var(--line-2); color:var(--ink); box-shadow:var(--sh); z-index:1300; line-height:1; }
+    body:not(.collapsed) #expandSidebarBtn{ display:none !important; }
+
+    /* Full-width content with comfortable spacing; leave room for hamburger */
+    #bedContainer{ padding:14px 16px 36px; }
+    #bedContainer .bed-head{ padding-left:54px; min-height:44px; align-items:center; }
+    #wardTitle{ font-size:20px; }
+    .bed-toolbar{ gap:10px; margin-bottom:12px; }
+    #bedList{ gap:12px; }
+    #bedList .bed-item{ padding:16px; }
+    #bedList .bed-text .line1{ font-size:16px; }
+    #bedList .bed-text .line2{ font-size:14px; }
+    /* sub-pages */
+    #wardWorkPage,#notesPage{ padding:14px 16px 140px !important; }
+    #profilePage{ padding:14px 16px !important; }
+    #backToBedsFromWW,#backToBedsFromNotes,#backToBedsBtn{ margin-left:54px; }
+  }
+  @media (min-width: 769px){ #sidebarBackdrop{ display:none !important; } }
 </style>
 <!-- SheetJS for parsing XLSX tab names -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -2185,6 +2245,31 @@ document.getElementById('fileInput').onchange=e=>{
 };
 
 document.getElementById('expandSidebarBtn').onclick=()=>document.body.classList.remove('collapsed');
+
+/* Mobile sidebar: slide-over behaviour.
+   On phones the sidebar overlays the content (see CSS), so start collapsed,
+   add a tap-to-close backdrop, and close it again once the user picks a
+   ward or a nav item. */
+(function(){
+  const isPhone = ()=> window.matchMedia('(max-width: 768px)').matches;
+  // Start collapsed on phones so the content gets the full width
+  if(isPhone()) document.body.classList.add('collapsed');
+  // Backdrop behind the open sidebar
+  const backdrop=document.createElement('div');
+  backdrop.id='sidebarBackdrop';
+  document.body.appendChild(backdrop);
+  backdrop.addEventListener('click', ()=> document.body.classList.add('collapsed'));
+  // Auto-close after choosing a ward or a nav action (phones only)
+  const sb=document.getElementById('sidebar');
+  sb?.addEventListener('click', (e)=>{
+    if(!isPhone()) return;
+    if(e.target.closest('#wardList li') || e.target.closest('.side-nav button') || e.target.closest('#quickIOBtn')){
+      setTimeout(()=> document.body.classList.add('collapsed'), 0);
+    }
+  });
+  // If the window crosses the breakpoint (e.g. rotate), keep state sensible
+  window.addEventListener('resize', ()=>{ if(!isPhone()) document.body.classList.remove('collapsed'); });
+})();
 
 /* Swipe to hide/show sidebar.
    Goals: 
