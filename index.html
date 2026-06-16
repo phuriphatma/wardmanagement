@@ -684,6 +684,8 @@ body.collapsed #expandSidebarBtn{display:none}
      into half the screen. Give the content the FULL width and turn the
      sidebar into a slide-over opened from a hamburger. */
   #mobileTabBar{ display:none; }  /* default hidden; the phone media query below turns it on */
+  /* Mobile-only controls: hidden by default, shown inside the phone media query below */
+  #wardPicker, #mobileProfileChip{ display:none; }
   @media (max-width: 768px){
     #sidebar{ position:fixed; top:0; left:0; bottom:0; width:min(86vw,330px); max-width:330px; z-index:1500;
       border-right:1px solid var(--line); box-shadow:14px 0 44px rgba(15,23,42,.24);
@@ -706,6 +708,17 @@ body.collapsed #expandSidebarBtn{display:none}
     #bedContainer .bed-head{ min-height:44px; align-items:center; }
     #wardTitle{ font-size:20px; }
     .bed-toolbar{ gap:10px; margin-bottom:12px; }
+    /* Ward picker dropdown (issue: pick a ward without opening the sidebar) */
+    #wardPicker{ display:inline-block; flex:1 1 140px; min-width:120px; max-width:260px; padding:11px 12px;
+      border:1px solid var(--line); border-radius:10px; background:var(--surface-2); color:var(--ink);
+      font-size:15px; font-weight:600; }
+    /* Profile chip (issue: profile menu was unreachable on phones) */
+    #mobileProfileChip{ display:flex; align-items:center; gap:6px; width:100%; margin:0 0 12px; padding:11px 14px;
+      border:1px solid var(--line); border-radius:12px; background:var(--surface-2); color:var(--ink);
+      font-size:14px; cursor:pointer; text-align:left; }
+    #mobileProfileChip .mpc-eyebrow{ font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+    #mobileProfileChip .mpc-name{ font-weight:700; font-size:15px; }
+    #mobileProfileChip .mpc-caret{ margin-left:auto; color:var(--muted); }
     #bedList{ gap:12px; }
     #bedList .bed-item{ padding:16px; }
     #bedList .bed-text .line1{ font-size:16px; }
@@ -727,8 +740,11 @@ body.collapsed #expandSidebarBtn{display:none}
     #mobileTabBar button.mt-primary .mt-ico{ width:50px; height:30px; display:grid; place-items:center;
       background:var(--primary); color:#fff; border-radius:999px; box-shadow:0 4px 12px rgba(37,99,235,.4); }
     #mobileTabBar button.mt-primary{ color:var(--primary); }
-    /* Hide the bar on the editor pages that own the bottom Preview panel */
-    body[data-view="quick"] #mobileTabBar, body[data-view="work"] #mobileTabBar{ display:none; }
+    /* WardWork view keeps the tab bar: lift its Preview button + sheet above the 60px bar */
+    #wardWorkPage .fab-preview{ bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important; }
+    #wardWorkPage .mobile-preview-sheet{ bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important; }
+    /* Hide the bar only on the Quick I/O editor (it owns the bottom Preview panel) */
+    body[data-view="quick"] #mobileTabBar{ display:none; }
   }
   @media (min-width: 769px){ #sidebarBackdrop{ display:none !important; } #mobileTabBar{ display:none !important; } }
 </style>
@@ -953,6 +969,9 @@ body.collapsed #expandSidebarBtn{display:none}
     </div>
 
     <div id="bedContainer">
+      <button id="mobileProfileChip" type="button" aria-label="Switch or add profile" title="Switch or add profile">
+        <span class="mpc-eyebrow">Profile</span><span class="mpc-name">Default</span><span class="mpc-caret">⌄</span>
+      </button>
       <div class="bed-head">
         <h2 id="wardTitle">Select a ward</h2>
         <label class="status-filter">Show
@@ -964,6 +983,7 @@ body.collapsed #expandSidebarBtn{display:none}
         </label>
       </div>
       <div class="bed-toolbar">
+        <select id="wardPicker" aria-label="Select ward"></select>
         <button id="addBedBtn" disabled>+ Add bed</button>
         <button id="selectBedsBtn" class="btn btn-ghost btn-sm">Select</button>
         <button id="moveSelectedBtn" class="btn btn-primary btn-sm" style="display:none;">Move selected (0)</button>
@@ -1394,6 +1414,8 @@ function refreshProfileUI(){
       btn.querySelector('.chip-name').textContent=cur.name;
     } else { btn.textContent='Profile'; }
   }
+  const mob=document.querySelector('#mobileProfileChip .mpc-name');
+  if(mob && cur) mob.textContent=cur.name;
   if(list){
     list.innerHTML='';
     Object.values(profileStore.map).forEach(p=>{
@@ -1414,6 +1436,24 @@ function refreshProfileUI(){
 function uuid(){return 'x'+Date.now()+Math.floor(Math.random()*1000)}
 function autoGrow(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}
 
+// Select a ward and return to the beds view (shared by the sidebar list and the mobile ward picker)
+function goToWard(wardId){
+  selectedWardId=wardId; selectedBedId=null; renderWards(); renderBeds();
+  const wwVisible = (wardWorkPage && wardWorkPage.style.display && wardWorkPage.style.display !== 'none');
+  const notesVisible = (notesPage && notesPage.style.display && notesPage.style.display !== 'none');
+  if(wwVisible){ backFromWW(); }
+  else if(notesVisible){ backFromNotes(); }
+  else { backToBeds(); }
+}
+// Populate the mobile ward-picker dropdown to mirror the sidebar ward list
+function renderWardPicker(){
+  const sel=document.getElementById('wardPicker'); if(!sel) return;
+  sel.innerHTML='';
+  const ph=document.createElement('option'); ph.value=''; ph.textContent='— Select ward —'; sel.appendChild(ph);
+  (data.wards||[]).forEach(w=>{ const o=document.createElement('option'); o.value=w.id; o.textContent=w.name; sel.appendChild(o); });
+  sel.value=selectedWardId||'';
+  sel.onchange=()=>{ if(sel.value) goToWard(sel.value); };
+}
 function renderWards(){
   const ul=document.getElementById('wardList');ul.innerHTML='';
   // apply toggle state to checkbox if present
@@ -1441,15 +1481,7 @@ function renderWards(){
     li.style.boxShadow = `inset 3px 0 0 ${hasBeds ? '#22c55e' : '#cbd5e1'}`;
     li.dataset.wardId = w.id; // Add ward ID for mobile drag-and-drop
     if(w.id===selectedWardId)li.classList.add('selected');
-    li.onclick=()=>{
-      selectedWardId=w.id;selectedBedId=null;renderWards();renderBeds();
-      // If WardWork or Notes is open, switch to beds view immediately
-      const wwVisible = (wardWorkPage && wardWorkPage.style.display && wardWorkPage.style.display !== 'none');
-      const notesVisible = (notesPage && notesPage.style.display && notesPage.style.display !== 'none');
-      if(wwVisible){ backFromWW(); }
-      else if(notesVisible){ backFromNotes(); }
-      else { backToBeds(); }
-    };
+    li.onclick=()=>goToWard(w.id);
     li.draggable=true;
     // Accept drop of beds to move between wards
     li.addEventListener('dragover',e=>{
@@ -1493,6 +1525,7 @@ function renderWards(){
     // remove long-press delete; overlay button handles deletion
     ul.appendChild(li);
   });
+  renderWardPicker();
 }
 
 function renderBeds(){
@@ -1990,6 +2023,8 @@ function deleteProfile(pid){
 function openProfilePanel(){ if(profileMenuPanel) profileMenuPanel.style.display='block'; }
 function closeProfilePanel(){ if(profileMenuPanel) profileMenuPanel.style.display='none'; }
 profileMenuBtn?.addEventListener('click', (e)=>{ e.stopPropagation(); if(profileMenuPanel){ const open=profileMenuPanel.style.display==='block'; profileMenuPanel.style.display=open?'none':'block'; }});
+// Mobile profile chip in the bed view: open the sidebar (where the panel lives) and show the profile menu
+document.getElementById('mobileProfileChip')?.addEventListener('click', (e)=>{ e.stopPropagation(); document.body.classList.remove('collapsed'); openProfilePanel(); });
 closeProfilePanelBtn?.addEventListener('click', ()=> closeProfilePanel());
 document.addEventListener('click', (e)=>{ const c=document.getElementById('profilesMenu'); if(c && !c.contains(e.target)) closeProfilePanel(); });
 profNewBtn?.addEventListener('click', ()=>{ const name=prompt('New profile name'); if(name==null) return; createProfile(name.trim()||'Untitled', {wards:[]}); });
