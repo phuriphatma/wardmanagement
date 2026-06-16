@@ -79,6 +79,18 @@ body.dragging-bed{overflow:hidden;}
 #addBedBtn:not(:disabled):hover{background:#f0f0f0}
 #addBedBtn:disabled{opacity:0.6;cursor:not-allowed}
 
+/* Quick I/O entry button (sidebar) */
+#sidebarHeader button#quickIOBtn{background:#007bff;color:#fff;font-weight:600;border-bottom:1px solid #006fe0;}
+#sidebarHeader button#quickIOBtn:hover{background:#006fe0;}
+
+/* Empty state shown when no ward is selected */
+.empty-state{text-align:center;padding:36px 16px;color:#666;display:flex;flex-direction:column;align-items:center;gap:10px;}
+.empty-state .es-icon{font-size:40px;line-height:1;opacity:.85;}
+.empty-state .es-title{font-size:17px;font-weight:600;color:#333;margin:0;}
+.empty-state .quick-io-cta{display:inline-block;padding:14px 22px;font-size:16px;font-weight:600;background:#2563eb;color:#fff;border:none;border-radius:12px;cursor:pointer;box-shadow:0 8px 20px rgba(37,99,235,.28);}
+.empty-state .quick-io-cta:hover{background:#1d4ed8;}
+.empty-state .hint{font-size:13px;color:#999;margin:0;max-width:280px;}
+
 /* Profile panel */
 #profilePanel{width:360px;max-width:100%;padding:16px;overflow-y:auto;display:none;background:#f9fafb}
 #profilePanel.active{display:block}
@@ -123,20 +135,29 @@ body.collapsed #expandSidebarBtn{display:none}
 
 .modal h2 { margin-top: 0; }
 .modal label { display:block; margin:8px 0; font-weight:600; }
-.modal input, .modal textarea {
-  width:100%; padding:8px; border:1px solid #ccc;
-  border-radius:4px; font-size:14px;
+.modal input, .modal textarea, .modal select {
+  width:100%; padding:9px 11px; border:1px solid #cbd5e1;
+  border-radius:9px; font-size:14px; color:#0f172a;
+}
+.modal input:focus, .modal textarea:focus, .modal select:focus{
+  outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.15);
 }
 .modal .actions {
-  margin-top:12px; display:flex; justify-content:flex-end; gap:8px;
+  margin-top:16px; display:flex; justify-content:flex-end; gap:8px;
 }
 .modal button {
-  padding:8px 14px; border-radius:4px; cursor:pointer;
-  border:1px solid #888; background:#f2f2f2;
+  padding:9px 14px; border-radius:9px; cursor:pointer; font-weight:500;
+  border:1px solid #cbd5e1; background:#fff; color:#334155;
 }
+.modal button:hover{ background:#f8fafc; }
 .modal button.save-btn {
-  background:#007bff; color:white; border-color:#007bff;
+  background:#2563eb; color:white; border-color:#2563eb;
 }
+.modal button.save-btn:hover{ background:#1d4ed8; border-color:#1d4ed8; }
+/* Google Sheet import: stepped sections */
+.sheet-step{ border:1px solid #eee; border-radius:10px; padding:12px; background:#fafbfc; }
+.sheet-step-title{ font-weight:700; font-size:14px; color:#1a2a44; margin-bottom:6px; }
+.sheet-step .row{ flex-wrap:wrap; }
   /* Notify editor (scoped to #profilePage) */
   #profilePage {
     --bg: #0b1020;
@@ -454,6 +475,184 @@ body.collapsed #expandSidebarBtn{display:none}
   #wardWorkPage .ww-task-handle{ cursor:grab; user-select:none; }
   #wardWorkPage .ww-task-handle:active{ cursor:grabbing; }
 </style>
+<!-- ============================================================
+     Modern clinical UI refresh (loaded last so it refines the above).
+     Scope: light app shell (sidebar, ward list, patient cards,
+     popovers, modals). The dark Quick-Ward-Note editor (#profilePage)
+     keeps its own theme via higher-specificity rules.
+     ============================================================ -->
+<style id="modern-ui">
+  :root{
+    --bg:#eef2f7; --surface:#ffffff; --surface-2:#f8fafc;
+    --ink:#0f172a; --ink-2:#334155; --muted:#64748b; --faint:#94a3b8;
+    --line:#e6eaf0; --line-2:#cbd5e1;
+    --primary:#2563eb; --primary-700:#1d4ed8; --primary-tint:#eff6ff;
+    --good:#15803d; --good-tint:#dcfce7; --good-line:#bbf7d0;
+    --bad:#b91c1c; --bad-tint:#fee2e2; --bad-line:#fecaca;
+    --r:10px; --r-lg:14px; --r-xl:18px;
+    --sh-sm:0 1px 2px rgba(15,23,42,.06);
+    --sh:0 6px 20px rgba(15,23,42,.08);
+    --sh-lg:0 18px 44px rgba(15,23,42,.18);
+  }
+  html,body{ background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  ::selection{ background:rgba(37,99,235,.18); }
+  /* Tidy scrollbars on the light shell */
+  #wardListContainer::-webkit-scrollbar,#bedContainer::-webkit-scrollbar{ width:10px; }
+  #wardListContainer::-webkit-scrollbar-thumb,#bedContainer::-webkit-scrollbar-thumb{ background:#d3dae3; border-radius:8px; border:2px solid var(--surface); }
+  :focus-visible{ outline:2px solid var(--primary); outline-offset:2px; border-radius:6px; }
+
+  /* ---------- Reusable button system (light shell) ---------- */
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; font-family:inherit; font-size:14px;
+    font-weight:600; line-height:1.1; border-radius:var(--r); border:1px solid var(--line-2); background:var(--surface);
+    color:var(--ink-2); padding:10px 14px; cursor:pointer; transition:background .15s,border-color .15s,box-shadow .15s,transform .04s; }
+  .btn:hover{ background:var(--surface-2); }
+  .btn:active{ transform:translateY(1px); }
+  .btn-block{ width:100%; }
+  .btn-primary{ background:var(--primary); border-color:var(--primary); color:#fff; box-shadow:var(--sh-sm); }
+  .btn-primary:hover{ background:var(--primary-700); border-color:var(--primary-700); }
+  .btn-ghost{ background:transparent; border-color:transparent; color:var(--muted); }
+  .btn-ghost:hover{ background:var(--surface-2); color:var(--ink-2); }
+  .btn-danger{ background:var(--bad-tint); border-color:var(--bad-line); color:var(--bad); }
+  .btn-danger:hover{ background:#fdd; }
+  .btn-sm{ padding:7px 11px; font-size:13px; }
+
+  /* ---------- Sidebar shell ---------- */
+  #sidebar{ width:264px; background:var(--surface); border-right:1px solid var(--line); }
+  #sidebarHeader{ background:var(--surface); border-bottom:1px solid var(--line); padding:14px 12px 12px; gap:8px; }
+  /* neutralise the old blanket "#sidebarHeader button" look */
+  #sidebarHeader button{ width:auto; padding:initial; font-size:14px; background:none; border:none; border-bottom:none; cursor:pointer; }
+
+  .brand{ display:flex; align-items:center; gap:10px; padding:0 2px 8px; }
+  .brand-mark{ width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg,#3b82f6,#1d4ed8); color:#fff;
+    display:grid; place-items:center; font-size:17px; font-weight:700; box-shadow:var(--sh-sm); flex:0 0 auto; }
+  .brand-name{ font-weight:700; font-size:15px; letter-spacing:-0.01em; color:var(--ink); }
+
+  #quickIOBtn{ width:100%; padding:11px 14px; border-radius:var(--r); background:var(--primary); color:#fff;
+    font-size:14.5px; font-weight:600; box-shadow:0 4px 12px rgba(37,99,235,.28); }
+  #quickIOBtn:hover{ background:var(--primary-700); }
+
+  .side-nav{ display:flex; flex-direction:column; gap:2px; margin-top:4px; }
+  .side-nav button{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; justify-content:flex-start;
+    padding:9px 10px; border-radius:8px; font-size:14px; font-weight:500; color:var(--ink-2); }
+  .side-nav button:hover{ background:var(--surface-2); }
+  .side-nav .nav-ico{ width:18px; text-align:center; font-size:15px; opacity:.95; flex:0 0 auto; }
+
+  /* Profile selector chip + its popover */
+  .profiles-menu{ position:relative; margin-top:6px; }
+  #profileMenuBtn{ width:100%; display:flex; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line);
+    border-radius:var(--r); background:var(--surface-2); color:var(--ink); font-size:13px; }
+  #profileMenuBtn:hover{ border-color:var(--line-2); background:#fff; }
+  #profileMenuBtn .chip-eyebrow{ font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+  #profileMenuBtn .chip-name{ font-weight:600; color:var(--ink); margin-left:2px; }
+  #profileMenuBtn .chip-caret{ margin-left:auto; color:var(--muted); font-size:12px; }
+
+  /* All three header popovers: modern card + never clipped */
+  #profileMenuPanel,#wwProfileMenuPanel,#notesProfileMenuPanel{
+    border:1px solid var(--line) !important; border-radius:var(--r-lg) !important; box-shadow:var(--sh-lg) !important;
+    overflow:hidden !important; padding:0 !important; }
+  /* Sidebar profile popover is full-width under the chip so it can't run off-screen */
+  #profileMenuPanel{ left:8px !important; right:8px !important; width:auto !important; top:calc(100% + 6px) !important; }
+  #profileList li,#wwProfileList li,#notesProfileList li{ padding:9px 14px; cursor:pointer; font-size:14px; }
+  #profileList li:hover,#wwProfileList li:hover,#notesProfileList li:hover{ background:var(--surface-2); }
+  /* Popover footer action buttons */
+  #profileMenuPanel button:not(.ghost),#wwProfileMenuPanel button:not(.ghost),#notesProfileMenuPanel button:not(.ghost){
+    padding:7px 11px; border:1px solid var(--line-2); border-radius:8px; background:var(--surface); color:var(--ink-2);
+    font-size:13px; font-weight:500; cursor:pointer; }
+  #profileMenuPanel button:not(.ghost):hover,#wwProfileMenuPanel button:not(.ghost):hover,#notesProfileMenuPanel button:not(.ghost):hover{ background:var(--surface-2); border-color:var(--line-2); }
+  #profileMenuPanel button.delete,#wwProfileMenuPanel button.delete,#notesProfileMenuPanel button.delete{
+    background:var(--bad-tint); border-color:var(--bad-line); color:var(--bad); }
+  #closeProfilePanel,#wwCloseProfilePanel,#notesCloseProfilePanel{ border:none; background:none; font-size:20px; line-height:1; color:var(--muted); cursor:pointer; padding:0 4px; }
+
+  /* ---------- Ward list ---------- */
+  #wardListContainer{ padding:10px; }
+  #wardListPrefs{ color:var(--muted) !important; padding:6px 4px 8px !important; }
+  .ward-list-head{ display:flex; align-items:center; justify-content:space-between; padding:2px 4px 6px; }
+  .ward-list-head .wl-title{ font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--faint); }
+  .ward-list-head .wl-tools{ display:flex; gap:4px; }
+  .ward-list-head .wl-tools button{ width:28px; height:28px; display:grid; place-items:center; border:1px solid var(--line);
+    border-radius:8px; background:var(--surface); color:var(--ink-2); font-size:15px; cursor:pointer; padding:0; }
+  .ward-list-head .wl-tools button:hover{ background:var(--surface-2); border-color:var(--line-2); }
+  body.edit-wards #editWardsBtn{ background:var(--primary-tint); border-color:var(--primary); color:var(--primary); }
+
+  #wardList li{ display:flex; align-items:center; gap:8px; padding:9px 10px 9px 12px; margin:3px 0; border-radius:10px;
+    border:1px solid transparent; box-shadow:inset 3px 0 0 var(--line-2); font-size:14px; color:var(--ink-2); }
+  #wardList li:hover{ background:var(--surface-2); }
+  #wardList li.selected{ background:var(--primary-tint); color:var(--primary-700); font-weight:600; box-shadow:inset 3px 0 0 var(--primary); }
+  #wardList li .wl-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #wardList li .wl-count{ flex:0 0 auto; font-size:12px; font-weight:600; color:var(--muted);
+    background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
+  #wardList li.selected .wl-count{ background:#fff; border-color:var(--primary-line,#bfdbfe); color:var(--primary-700); }
+  #wardList li.has-beds .wl-count{ color:var(--good); }
+  body.edit-wards #wardList li .wl-count{ visibility:hidden; }
+
+  .controls{ display:flex; gap:8px; padding:10px 2px 4px; border-top:1px solid var(--line); margin-top:8px; }
+  .controls button{ flex:1; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface);
+    color:var(--ink-2); font-size:13px; font-weight:500; cursor:pointer; }
+  .controls button:hover{ background:var(--surface-2); }
+
+  /* ---------- Bed container (patient list) ---------- */
+  #bedContainer{ padding:20px 22px; }
+  .bed-head{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  #wardTitle{ margin:0; font-size:22px; font-weight:700; letter-spacing:-0.02em; color:var(--ink); }
+  .bed-toolbar{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  .status-filter{ display:flex; align-items:center; gap:6px; margin-left:auto; font-size:13px; color:var(--muted); }
+  .status-filter select{ padding:7px 28px 7px 10px; border:1px solid var(--line-2); border-radius:8px; background:var(--surface);
+    color:var(--ink); font-size:13px; font-weight:500; }
+  #addBedBtn{ width:auto; display:inline-flex; align-items:center; gap:6px; margin:0; padding:10px 16px; border-radius:var(--r);
+    background:var(--primary); border:1px solid var(--primary); color:#fff; font-weight:600; box-shadow:var(--sh-sm); }
+  #addBedBtn:not(:disabled):hover{ background:var(--primary-700); }
+  #addBedBtn:disabled{ background:var(--surface-2); border-color:var(--line); color:var(--faint); box-shadow:none; }
+
+  /* Patient cards */
+  #bedList{ display:flex; flex-direction:column; gap:10px; }
+  #bedList .bed-item{ border:1px solid var(--line); border-left:4px solid var(--good); border-radius:var(--r-lg);
+    background:var(--surface); padding:14px 16px; box-shadow:var(--sh-sm); transition:box-shadow .15s,border-color .15s,transform .05s; }
+  #bedList .bed-item:hover{ box-shadow:var(--sh); }
+  #bedList .bed-item.is-discharge{ border-left-color:var(--bad); background:var(--surface-2); }
+  #bedList .bed-text .line1{ font-size:15.5px; font-weight:600; color:var(--ink); }
+  #bedList .bed-text .line2{ font-size:13px; color:var(--muted); margin-top:3px; }
+  .status-badge{ margin-left:8px; font-size:11px; font-weight:600; padding:2px 9px; border-radius:999px; }
+  .status-active{ background:var(--good-tint); color:var(--good); border:1px solid var(--good-line); }
+  .status-discharge{ background:var(--bad-tint); color:var(--bad); border:1px solid var(--bad-line); }
+  #bedList .actions-row{ gap:6px; }
+  #bedList .actions-row button{ padding:6px 12px; border-radius:8px; border:1px solid var(--line-2); background:var(--surface);
+    color:var(--ink-2); font-size:13px; font-weight:500; }
+  #bedList .actions-row button:hover{ background:var(--surface-2); }
+  #bedList .actions-row .delete{ border-color:var(--bad-line); background:var(--bad-tint); color:var(--bad); }
+  /* Reveal row actions on hover for a calmer list (desktop only) */
+  @media (hover:hover) and (min-width:980px){
+    #bedList .bed-item:not(.select-mode) .actions-row{ opacity:0; transition:opacity .15s; }
+    #bedList .bed-item:not(.select-mode):hover .actions-row,
+    #bedList .bed-item:not(.select-mode):focus-within .actions-row{ opacity:1; }
+  }
+  #bedList .bed-item.selected{ border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); background:var(--primary-tint); }
+
+  /* ---------- Light cards (WardWork / Notes / Sheet sections) ----------
+     #profilePage .card has higher specificity, so the dark editor keeps its
+     own background/border; only an extra soft shadow reaches it. */
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--sh-sm); }
+
+  /* ---------- Modals ---------- */
+  .modal{ background:rgba(15,23,42,.45); backdrop-filter:blur(2px); }
+  .modal-content{ border-radius:var(--r-xl); box-shadow:var(--sh-lg); padding:22px; border:1px solid var(--line); }
+  .modal h2{ font-size:19px; font-weight:700; letter-spacing:-0.01em; }
+
+  /* Floating Quick-Note "Back" button readable on the page bg */
+  #backToBedsBtn,#backToBedsFromWW,#backToBedsFromNotes{ align-self:flex-start; background:var(--surface); border:1px solid var(--line-2);
+    border-radius:10px; padding:8px 14px; font-weight:600; color:var(--ink-2); box-shadow:var(--sh-sm); cursor:pointer; }
+  #backToBedsFromWW:hover,#backToBedsFromNotes:hover{ background:var(--surface-2); }
+
+  /* ---------- WardWork / Notes light polish ---------- */
+  #wardWorkPage input[type=text],#wardWorkPage input[type=date],#notesEditableContent,#wwPreviewTa{
+    border:1px solid var(--line-2) !important; border-radius:9px; background:var(--surface); color:var(--ink); }
+  #wardWorkPage #wwAddBlock{ background:var(--primary); border:1px solid var(--primary); color:#fff; border-radius:10px; padding:9px 16px; font-weight:600; }
+  #wardWorkPage #wwAddBlock:hover{ background:var(--primary-700); }
+  #wwSnipToggle,#wwCopy,#wwPreviewToggle,#notesCopyBtn,#wwProfileMenuBtn,#notesProfileMenuBtn{
+    border:1px solid var(--line-2) !important; border-radius:9px !important; background:var(--surface) !important; color:var(--ink-2) !important; padding:7px 12px !important; font-weight:500; cursor:pointer; }
+  #wwSnipToggle:hover,#wwCopy:hover,#wwPreviewToggle:hover,#notesCopyBtn:hover,#wwProfileMenuBtn:hover,#notesProfileMenuBtn:hover{ background:var(--surface-2) !important; }
+  /* WardWork blocks (ww-block) as clean cards */
+  #wwList .ww-block{ border:1px solid var(--line) !important; border-radius:var(--r-lg) !important; background:var(--surface) !important; box-shadow:var(--sh-sm); }
+</style>
 <!-- SheetJS for parsing XLSX tab names -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -461,41 +660,53 @@ body.collapsed #expandSidebarBtn{display:none}
 <div id="container">
   <div id="sidebar">
     <div id="sidebarHeader">
-      <button id="addWardBtn">+ Add Ward</button>
-      <button id="editWardsBtn">Edit Wards</button>
-      <!-- Compact Profiles control -->
-      <div id="profilesMenu" style="position:relative;">
-        <button id="profileMenuBtn" class="ghost" style="width:100%;border:1px solid #ddd; padding:12px; border-radius:0; font-size:18px; background:#fff; border-bottom:1px solid #ddd;">Profile</button>
-        <div id="profileMenuPanel" style="display:none; position:absolute; right:0; top:100%; margin-top:6px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,0.1); width:280px; max-height:60vh; overflow:auto; z-index:50;">
-          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #eee;">
+      <div class="brand">
+        <span class="brand-mark">✚</span>
+        <span class="brand-name">Ward Manager</span>
+      </div>
+      <button id="quickIOBtn" title="Open a Quick Ward Note / I/O calculator without a bed — save it to a ward later">⚡ Quick I/O note</button>
+      <nav class="side-nav">
+        <button id="wardWorkBtn"><span class="nav-ico">📋</span> Ward work</button>
+        <button id="notesBtn"><span class="nav-ico">📝</span> Notes</button>
+        <button id="presetsBtn"><span class="nav-ico">⚙️</span> Ward presets</button>
+      </nav>
+      <!-- Profile (workspace) selector -->
+      <div id="profilesMenu" class="profiles-menu">
+        <button id="profileMenuBtn" title="Switch profile">Profile</button>
+        <div id="profileMenuPanel" style="display:none; position:absolute; right:0; top:100%; margin-top:6px; background:#fff; max-height:60vh; overflow:auto; z-index:50;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee;">
             <strong>Profiles</strong>
             <button id="closeProfilePanel" class="ghost" title="Close">×</button>
           </div>
           <ul id="profileList" style="list-style:none; margin:0; padding:6px 0;"></ul>
           <div style="display:flex; gap:6px; padding:10px 12px; border-top:1px solid #eee; position:sticky; bottom:0; background:#fff; flex-wrap:wrap;">
-            <button id="profNewBtn" title="New profile">New</button>
-            <button id="profNewSheetBtn" title="New profile from Google Sheet">New from Sheet</button>
-            <button id="profDupBtn" title="Duplicate current">Dup</button>
-            <button id="profRenBtn" title="Rename">Ren</button>
-            <button id="profDelBtn" title="Delete" class="delete">Del</button>
-            <button id="profRefreshSheetBtn" style="margin-left:auto; display:none;" title="Refresh from Google Sheet">Refresh</button>
+            <button id="profNewBtn" title="Create a new, empty profile">New</button>
+            <button id="profNewSheetBtn" title="Create a profile from a Google Sheet">Import from Sheet</button>
+            <button id="profDupBtn" title="Duplicate the current profile">Duplicate</button>
+            <button id="profRenBtn" title="Rename the current profile">Rename</button>
+            <button id="profDelBtn" title="Delete the current profile" class="delete">Delete</button>
+            <button id="profRefreshSheetBtn" style="margin-left:auto; display:none;" title="Re-import from the linked Google Sheet">Refresh</button>
           </div>
         </div>
       </div>
-      <button id="presetsBtn">Presets</button>
-  <button id="wardWorkBtn">WardWork</button>
-  <button id="notesBtn">Notes</button>
     </div>
     <div id="wardListContainer">
+      <div class="ward-list-head">
+        <span class="wl-title">Wards</span>
+        <div class="wl-tools">
+          <button id="addWardBtn" title="Add a ward">+</button>
+          <button id="editWardsBtn" title="Edit / delete wards">✎</button>
+        </div>
+      </div>
       <div id="wardListPrefs" style="display:flex; align-items:center; gap:8px; padding:6px 6px 0; font-size:12px; color:#555;">
         <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-          <input type="checkbox" id="wardOnlyBedsToggle" /> Only wards with beds
+          <input type="checkbox" id="wardOnlyBedsToggle" /> Only show wards with patients
         </label>
       </div>
       <ul id="wardList"></ul>
       <div class="controls">
-        <button id="exportBtn">Export Data</button>
-        <button id="importBtn">Import Data</button>
+        <button id="exportBtn" title="Save an encrypted backup file">Back up</button>
+        <button id="importBtn" title="Restore from a backup file">Restore</button>
         <input type="file" id="fileInput" style="display:none">
       </div>
     </div>
@@ -517,10 +728,10 @@ body.collapsed #expandSidebarBtn{display:none}
               </div>
               <ul id="wwProfileList" style="list-style:none; margin:0; padding:6px 0;"></ul>
               <div style="display:flex; gap:6px; padding:10px 12px; border-top:1px solid #eee; position:sticky; bottom:0; background:#fff; flex-wrap:wrap;">
-                <button id="wwProfNewBtn" title="New document">New</button>
-                <button id="wwProfDupBtn" title="Duplicate current">Dup</button>
-                <button id="wwProfRenBtn" title="Rename">Ren</button>
-                <button id="wwProfDelBtn" title="Delete" class="delete">Del</button>
+                <button id="wwProfNewBtn" title="Create a new document">New</button>
+                <button id="wwProfDupBtn" title="Duplicate this document">Duplicate</button>
+                <button id="wwProfRenBtn" title="Rename this document">Rename</button>
+                <button id="wwProfDelBtn" title="Delete this document" class="delete">Delete</button>
               </div>
             </div>
           </div>
@@ -629,10 +840,10 @@ body.collapsed #expandSidebarBtn{display:none}
               </div>
               <ul id="notesProfileList" style="list-style:none; margin:0; padding:6px 0;"></ul>
               <div style="display:flex; gap:6px; padding:10px 12px; border-top:1px solid #eee; position:sticky; bottom:0; background:#fff; flex-wrap:wrap;">
-                <button id="notesProfNewBtn" title="New document">New</button>
-                <button id="notesProfDupBtn" title="Duplicate current">Dup</button>
-                <button id="notesProfRenBtn" title="Rename">Ren</button>
-                <button id="notesProfDelBtn" title="Delete" class="delete">Del</button>
+                <button id="notesProfNewBtn" title="Create a new note">New</button>
+                <button id="notesProfDupBtn" title="Duplicate this note">Duplicate</button>
+                <button id="notesProfRenBtn" title="Rename this note">Rename</button>
+                <button id="notesProfDelBtn" title="Delete this note" class="delete">Delete</button>
               </div>
             </div>
           </div>
@@ -663,20 +874,21 @@ body.collapsed #expandSidebarBtn{display:none}
     </div>
 
     <div id="bedContainer">
-      <h2 id="wardTitle">Select a ward</h2>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button id="addBedBtn" disabled>+ Add Bed</button>
-        <button id="selectBedsBtn" class="ghost">Select Beds</button>
-        <button id="moveSelectedBtn" class="save-btn" style="display:none;">Move Selected (0)</button>
-        <button id="clearSelectionBtn" class="ghost" style="display:none;">Clear</button>
-        <label style="margin-left:auto; display:flex; gap:6px; align-items:center;">
-          Status
+      <div class="bed-head">
+        <h2 id="wardTitle">Select a ward</h2>
+        <label class="status-filter">Show
           <select id="statusFilter">
-            <option value="both">Both</option>
-            <option value="active">Active</option>
-            <option value="discharge">Discharge</option>
+            <option value="both">All patients</option>
+            <option value="active">Active only</option>
+            <option value="discharge">Discharge only</option>
           </select>
         </label>
+      </div>
+      <div class="bed-toolbar">
+        <button id="addBedBtn" disabled>+ Add bed</button>
+        <button id="selectBedsBtn" class="btn btn-ghost btn-sm">Select</button>
+        <button id="moveSelectedBtn" class="btn btn-primary btn-sm" style="display:none;">Move selected (0)</button>
+        <button id="clearSelectionBtn" class="btn btn-ghost btn-sm" style="display:none;">Clear</button>
       </div>
       <div id="bedList"></div>
     </div>
@@ -690,7 +902,7 @@ body.collapsed #expandSidebarBtn{display:none}
           <option value="discharge">Discharge</option>
         </select>
       </h1>
-      <div class="sub">Fast template for bedside updates</div>
+      <div class="sub" id="profileSubtitle">Fast template for bedside updates</div>
     </header>
 
     <main>
@@ -794,7 +1006,7 @@ body.collapsed #expandSidebarBtn{display:none}
 
           <section class="actions">
             <button id="copy">Copy</button>
-            <button id="saveProfileBtn" class="save-btn" style="background:#007bff;color:white;border:none;">Save</button>
+            <button id="saveProfileBtn" class="save-btn" style="background:#2563eb;color:white;border:none;">Save</button>
           </section>
         </div>
       </div>
@@ -834,7 +1046,7 @@ body.collapsed #expandSidebarBtn{display:none}
       <input id="presetName" placeholder="e.g., Surgery" />
     </label>
     <label>Ward names (one per line)
-      <textarea id="presetWards" rows="8" placeholder="3ก\nกว\n...\n"></textarea>
+      <textarea id="presetWards" rows="8" placeholder="One ward name per line, e.g.&#10;3ก&#10;กว6/1&#10;ICU"></textarea>
     </label>
     <div class="row" style="gap:8px; align-items:center;">
       <label style="flex:1">Existing presets
@@ -876,6 +1088,26 @@ body.collapsed #expandSidebarBtn{display:none}
   </div>
 </div>
 
+<!-- Save Draft Note Modal -->
+<div id="saveDraftModal" class="modal">
+  <div class="modal-content">
+    <h2>Save Note to a Ward</h2>
+    <p style="margin:6px 0 12px; font-size:13px; color:#555;">This note isn't attached to a bed yet. Pick where to save it — a new bed will be created for you.</p>
+    <label>Ward
+      <select id="saveDraftWardSelect"></select>
+    </label>
+    <div class="row" id="saveDraftNewWardRow" style="display:none;">
+      <label style="flex:1">New ward name
+        <input id="saveDraftNewWardName" placeholder="e.g., 3ก" />
+      </label>
+    </div>
+    <div class="actions">
+      <button id="saveDraftCancelBtn">Cancel</button>
+      <button id="saveDraftConfirmBtn" class="save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- I/O Snippets Modal -->
 <div id="ioSnippetsModal" class="modal">
   <div class="modal-content" style="max-width:520px;">
@@ -894,68 +1126,88 @@ body.collapsed #expandSidebarBtn{display:none}
 <!-- Google Sheet Profile Modal -->
 <div id="sheetProfileModal" class="modal">
   <div class="modal-content">
-    <h2>New Profile from Google Sheet</h2>
-    <p style="margin:6px 0 12px; font-size:13px; color:#555;">Tip: In Google Sheets, use File → Share → Publish to web → Entire sheet → CSV, then paste the CSV link here.</p>
-    <label>CSV URL
-      <input id="sheetCsvUrl" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv&gid=..." />
-    </label>
-    <label>
-      <input type="checkbox" id="sheetHasHeader" checked /> First row is header
-    </label>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <button id="sheetFetchBtn">Fetch Columns</button>
-      <span id="sheetFetchStatus" style="font-size:12px;color:#777;"></span>
-    </div>
-    <div class="row" id="sheetTabsRow" style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-      <label style="flex:1">Enter tab name (optional)
-        <input id="sheetTabName" placeholder="e.g., Gen3 ตึกเก่า" />
+    <h2>Import patients from Google Sheets</h2>
+    <p style="margin:4px 0 12px; font-size:13px; color:#555;">Bring a ward list in from a Google Sheet in three quick steps.</p>
+
+    <!-- Step 1: link -->
+    <div class="sheet-step">
+      <div class="sheet-step-title">Step 1 · Paste your sheet link</div>
+      <details style="margin:4px 0 8px; font-size:12px; color:#555;">
+        <summary style="cursor:pointer; color:#007bff;">How do I get the link?</summary>
+        <ol style="margin:6px 0 0; padding-left:18px; line-height:1.6;">
+          <li>In Google Sheets, open <strong>File → Share → Publish to web</strong>.</li>
+          <li>Choose the tab (or “Entire document”) and pick <strong>Comma-separated values (.csv)</strong>.</li>
+          <li>Click <strong>Publish</strong>, then copy the link it gives you and paste it below.</li>
+        </ol>
+      </details>
+      <label>Sheet link (CSV)
+        <input id="sheetCsvUrl" placeholder="Paste the published .csv link here" />
       </label>
-      <div style="color:#777; font-size:12px; min-width:160px;">Press Enter to load by name, or paste a URL with gid=…</div>
+      <label style="font-weight:400; font-size:13px;">
+        <input type="checkbox" id="sheetHasHeader" checked /> The first row is a header (column titles)
+      </label>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:6px; flex-wrap:wrap;">
+        <button id="sheetFetchBtn" class="save-btn">Load sheet →</button>
+        <span id="sheetFetchStatus" style="font-size:12px;color:#777;"></span>
+      </div>
     </div>
-    <div id="sheetTabNamesWrap" style="display:none; margin-top:6px;">
-      <div style="font-size:12px; color:#666; margin-bottom:4px;">Tabs (click to load):</div>
-      <div id="sheetTabChips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+
+    <!-- Step 2: tab (only useful when the workbook has several tabs) -->
+    <div class="sheet-step" id="sheetTabsRow" style="margin-top:14px;">
+      <div class="sheet-step-title">Step 2 · Choose a tab <span style="font-weight:400; color:#999;">(only if your sheet has more than one)</span></div>
+      <label>Tab name
+        <input id="sheetTabName" placeholder="e.g., Gen3 ตึกเก่า — then press Enter" />
+      </label>
+      <div style="color:#999; font-size:12px; margin-top:2px;">Type the tab’s name and press Enter, or just click one below.</div>
+      <div id="sheetTabNamesWrap" style="display:none; margin-top:8px;">
+        <div style="font-size:12px; color:#666; margin-bottom:4px;">Tabs in this sheet — tap one to load it:</div>
+        <div id="sheetTabChips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+      </div>
     </div>
-    <div id="sheetMapping" style="display:none; margin-top:12px;">
+
+    <!-- Step 3: map columns -->
+    <div id="sheetMapping" class="sheet-step" style="display:none; margin-top:14px;">
+      <div class="sheet-step-title">Step 3 · Match your columns</div>
+      <p style="margin:2px 0 10px; font-size:12px; color:#666;">Tell the app which column holds what. Use the dropdowns, or press <strong>Pick</strong> and then tap a column in the preview below.</p>
       <div class="row">
-        <label style="flex:1; display:flex; gap:6px; align-items:center;">Ward column
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Ward
           <select id="colWard" style="flex:1"></select>
           <button id="pickWardBtn" type="button">Pick</button>
         </label>
-        <label style="flex:1; display:flex; gap:6px; align-items:center;">Bed/Room column
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Bed / Room
           <select id="colBed" style="flex:1"></select>
           <button id="pickBedBtn" type="button">Pick</button>
         </label>
       </div>
       <div class="row">
-        <label style="flex:1; display:flex; gap:6px; align-items:center;">Name column
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Patient name
           <select id="colName" style="flex:1"></select>
           <button id="pickNameBtn" type="button">Pick</button>
         </label>
-        <label style="flex:1; display:flex; gap:6px; align-items:center;">Dx column
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Diagnosis (Dx)
           <select id="colDx" style="flex:1"></select>
           <button id="pickDxBtn" type="button">Pick</button>
         </label>
       </div>
       <div class="row">
-        <label style="flex:1; display:flex; gap:6px; align-items:center;">Status column (Active/Discharge)
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">Status <span style="font-weight:400;color:#999;">(optional)</span>
           <select id="colStatus" style="flex:1"></select>
           <button id="pickStatusBtn" type="button">Pick</button>
         </label>
-        <div style="flex:1; color:#666; font-size:12px;">Tip: Values like "active", "admit" count as Active; values like "discharge", "dc", "d/c" count as Discharge.</div>
+        <div style="flex:1; color:#999; font-size:12px;">“active / admit” → Active · “discharge / dc / d/c” → Discharge.</div>
       </div>
       <div class="row">
-        <label style="flex:1; display:flex; gap:6px; align-items:center;">HN column (optional)
+        <label style="flex:1; display:flex; gap:6px; align-items:center;">HN <span style="font-weight:400;color:#999;">(optional)</span>
           <select id="colHN" style="flex:1"></select>
           <button id="pickHNBtn" type="button">Pick</button>
         </label>
-        <div style="flex:1; color:#666; font-size:12px;">Optional: Patient hospital number (HN/MRN)</div>
+        <div style="flex:1; color:#999; font-size:12px;">Hospital number / MRN, if your sheet has one.</div>
       </div>
-      <label>
-        <input type="checkbox" id="appendNameToBed" checked /> Append Name to Bed/Room
+      <label style="font-weight:400; font-size:13px;">
+        <input type="checkbox" id="appendNameToBed" checked /> Show the patient’s name next to the bed
       </label>
-      <div id="sheetPickStatus" style="margin-top:6px; font-size:12px; color:#007bff; display:none;">Click a column in the table…</div>
-      <div style="margin-top:12px; font-weight:600;">Table preview</div>
+      <div id="sheetPickStatus" style="margin-top:6px; font-size:12px; color:#007bff; display:none;">Now tap a column in the preview…</div>
+      <div style="margin-top:12px; font-weight:600;">Preview</div>
       <div id="sheetTableWrap" style="max-height:320px; overflow:auto; border:1px solid #ddd; border-radius:6px; margin-top:6px;">
         <table id="sheetTable" style="border-collapse:collapse; width:100%; font-size:12px;">
           <!-- populated dynamically -->
@@ -964,7 +1216,7 @@ body.collapsed #expandSidebarBtn{display:none}
     </div>
     <div class="actions">
       <button id="sheetCancelBtn">Cancel</button>
-      <button id="sheetCreateBtn" class="save-btn" disabled>Create Profile</button>
+      <button id="sheetCreateBtn" class="save-btn" disabled>Create profile</button>
     </div>
   </div>
 </div>
@@ -1048,15 +1300,18 @@ function refreshProfileUI(){
   const btn=document.getElementById('profileMenuBtn');
   const list=document.getElementById('profileList');
   const cur=profileStore.map[currentProfileId];
-  if(btn){ btn.textContent = cur ? `Profile: ${cur.name}` : 'Profile'; }
+  if(btn){
+    if(cur){
+      btn.innerHTML='<span class="chip-eyebrow">Profile</span><span class="chip-name"></span><span class="chip-caret">⌄</span>';
+      btn.querySelector('.chip-name').textContent=cur.name;
+    } else { btn.textContent='Profile'; }
+  }
   if(list){
     list.innerHTML='';
     Object.values(profileStore.map).forEach(p=>{
       const li=document.createElement('li');
       li.textContent=p.name||p.id;
-      li.style.padding='8px 12px';
-      li.style.cursor='pointer';
-      if(p.id===currentProfileId){ li.style.fontWeight='600'; li.style.background='#f5f5f5'; }
+      if(p.id===currentProfileId){ li.style.fontWeight='700'; li.style.color='var(--primary-700)'; li.style.background='var(--primary-tint)'; }
       li.addEventListener('click', ()=>{ switchProfile(p.id); closeProfilePanel(); });
       list.appendChild(li);
     });
@@ -1089,10 +1344,13 @@ function renderWards(){
     }).length;
     // if preference is to show only wards with beds, skip if none
     if(getWardListOnlyBeds() && count===0){ return; }
-  li.textContent=w.name+' ('+count+' beds)';
-  // Green if has beds by current filter, red if none
-  const hasBeds = count > 0;
-  li.style.boxShadow = `inset 4px 0 0 ${hasBeds ? '#3ecf8e' : '#ff6b6b'}`;
+    const hasBeds = count > 0;
+    if(hasBeds) li.classList.add('has-beds');
+    const nameEl=document.createElement('span'); nameEl.className='wl-name'; nameEl.textContent=w.name;
+    const countEl=document.createElement('span'); countEl.className='wl-count'; countEl.textContent=count;
+    li.appendChild(nameEl); li.appendChild(countEl);
+    // Left accent: green when the ward has patients (by current filter), grey when empty
+    li.style.boxShadow = `inset 3px 0 0 ${hasBeds ? '#22c55e' : '#cbd5e1'}`;
     li.dataset.wardId = w.id; // Add ward ID for mobile drag-and-drop
     if(w.id===selectedWardId)li.classList.add('selected');
     li.onclick=()=>{
@@ -1159,7 +1417,24 @@ function renderBeds(){
   const statusSel=document.getElementById('statusFilter');
   bedList.innerHTML='';
   const ward=data.wards.find(w=>w.id===selectedWardId);
-  if(!ward){title.textContent='Select a ward';addBtn.disabled=true;return;}
+  if(!ward){
+    title.textContent='Select a ward';
+    addBtn.disabled=true;
+    const resumeLabel = hasDraft() ? 'Resume Quick I/O Note' : 'Add / Calculate I/O';
+    const resumeHint = hasDraft()
+      ? 'You have an unsaved note in progress. Pick it up where you left off.'
+      : 'Start a note and I/O calculation right away — no need to create a ward or bed first. Save it to a ward whenever you like.';
+    bedList.innerHTML =
+      '<div class="empty-state">'
+      + '<div class="es-icon">⚡</div>'
+      + '<p class="es-title">'+(hasDraft()?'Unsaved note in progress':'Nothing selected yet')+'</p>'
+      + '<button id="emptyQuickIOBtn" class="quick-io-cta">'+resumeLabel+'</button>'
+      + '<p class="hint">'+resumeHint+'</p>'
+      + '</div>';
+    const eqb=document.getElementById('emptyQuickIOBtn');
+    if(eqb) eqb.addEventListener('click', openDraftNote);
+    return;
+  }
   title.textContent='Ward: '+ward.name;addBtn.disabled=false;
   // apply status filter
   const currentFilter = (localStorage.getItem(STATUS_FILTER_KEY)||'both');
@@ -1206,6 +1481,7 @@ function renderBeds(){
   line1.textContent = header;
   // status badge
   const st = (b.status==='discharge') ? 'discharge' : 'active';
+  if(st==='discharge') div.classList.add('is-discharge');
     const badge=document.createElement('span');
   badge.className = 'status-badge ' + (st==='discharge' ? 'status-discharge' : 'status-active');
   badge.textContent = st==='discharge' ? 'Discharge' : 'Active';
@@ -1360,7 +1636,7 @@ function renderBeds(){
     const count=selectedBedIds.size;
     moveSelBtn.style.display = selectionMode? 'inline-block':'none';
     clearSelBtn.style.display = selectionMode? 'inline-block':'none';
-    moveSelBtn.textContent = `Move Selected (${count})`;
+    moveSelBtn.textContent = `Move selected (${count})`;
     // show/hide checkboxes
     bedList.querySelectorAll('.select-box').forEach(cb=> cb.style.display = selectionMode? 'inline-block':'none');
     bedList.querySelectorAll('.bed-item').forEach(item=> item.classList.toggle('select-mode', selectionMode));
@@ -1381,7 +1657,7 @@ function toggleBedSelection(bedId, divEl, explicit){
   if(shouldSelect) selectedBedIds.add(bedId); else selectedBedIds.delete(bedId);
   if(divEl){ divEl.classList.toggle('selected', shouldSelect); const cb=divEl.querySelector('.select-box'); if(cb) cb.checked=shouldSelect; }
   // update toolbar count
-  const moveSelBtn=document.getElementById('moveSelectedBtn'); if(moveSelBtn) moveSelBtn.textContent=`Move Selected (${selectedBedIds.size})`;
+  const moveSelBtn=document.getElementById('moveSelectedBtn'); if(moveSelBtn) moveSelBtn.textContent=`Move selected (${selectedBedIds.size})`;
 }
 
 // ===== Mobile touch drag-and-drop (fallback for iOS/Android) =====
@@ -1526,7 +1802,10 @@ let wardsEditMode=false;
 try{ wardsEditMode = JSON.parse(localStorage.getItem('wardsEditMode')||'false'); }catch{}
 function applyWardsEditMode(){
   document.body.classList.toggle('edit-wards', !!wardsEditMode);
-  if(editWardsBtn) editWardsBtn.textContent = wardsEditMode ? 'Done' : 'Edit Wards';
+  if(editWardsBtn){
+    editWardsBtn.textContent = wardsEditMode ? '✓' : '✎';
+    editWardsBtn.title = wardsEditMode ? 'Done editing wards' : 'Edit / delete wards';
+  }
 }
 applyWardsEditMode();
 editWardsBtn.onclick=()=>{ wardsEditMode=!wardsEditMode; localStorage.setItem('wardsEditMode', JSON.stringify(wardsEditMode)); applyWardsEditMode(); };
@@ -1637,7 +1916,7 @@ function closeSheetProfileModal(){ sheetProfileModal.style.display='none'; }
 function resetSheetModal(){
   sheetCsvUrl.value=''; sheetHasHeader.checked=true; sheetFetchStatus.textContent='';
   sheetMapping.style.display='none'; sheetCreateBtn.disabled=true;
-  if(sheetTabsRow){ sheetTabsRow.style.display='flex'; }
+  if(sheetTabsRow){ sheetTabsRow.style.display='block'; }
   if(sheetTabName){ sheetTabName.value=''; }
   ;[colWard,colBed,colName,colDx,colStatus].forEach(sel=> sel.innerHTML='');
 }
@@ -4485,8 +4764,17 @@ function renderWW(){
   const byBed=new Map();
   wwTasks.forEach(t=>{ const key=(t.bed||''); if(!byBed.has(key)) byBed.set(key, []); byBed.get(key).push(t); });
   const labelsOrdered = getOrderedLabels(prof.id, Array.from(byBed.keys()));
-  labelsOrdered.forEach((bedLabel)=>{
-    const tasks = byBed.get(bedLabel) || [];
+  labelsOrdered.forEach((bedLabel)=>{ wwList.appendChild(buildWWBlock(prof, bedLabel)); });
+  updateWWPreview();
+}
+
+// Build one WardWork block (a ward/bed label and its tasks) and RETURN the
+// element without inserting it. Callers append it, so "+ Block" / "add task"
+// can update the DOM incrementally instead of re-rendering the whole list —
+// a full re-render removes the focused field and makes the mobile keyboard
+// dismiss-then-reopen (the "dizzy" jump).
+function buildWWBlock(prof, bedLabel){
+    const tasks = wwTasks.filter(t=> (t.bed||'')===bedLabel);
     const group=document.createElement('div');
     group.className='ww-block';
     group.style.border='1px solid #ddd'; group.style.borderRadius='10px'; group.style.padding='8px 10px'; group.style.background='#fafafa';
@@ -4523,7 +4811,10 @@ function renderWW(){
       // No internal separator -> treat the whole label as ward text, leave bed empty
       wardInp.value=bedLabel||''; bedInp.value='';
     }
-  const addBtn=document.createElement('button'); addBtn.textContent='add task'; addBtn.className='ghost'; addBtn.onclick=()=>{ addEmptyTask(getCombined(), true); };
+  const addBtn=document.createElement('button'); addBtn.textContent='+ Task'; addBtn.className='ghost'; addBtn.title='Add a task to this block';
+  // Keep the on-screen keyboard from dismissing when tapping the button.
+  addBtn.addEventListener('mousedown', e=> e.preventDefault());
+  addBtn.onclick=()=>{ addEmptyTask(getCurrentLabel(), true); };
   // Quick snippet insertion button inside block for convenience
   const snQuick=document.createElement('button'); snQuick.textContent='⧉+'; snQuick.className='ghost'; snQuick.title='Insert snippet';
   snQuick.onclick=()=>{
@@ -4704,7 +4995,7 @@ function renderWW(){
       showMenu(bedPickBtn, beds, (val)=>{ bedInp.value=val; renameGroup(getCurrentLabel(), getCombined()); });
     });
     const isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
-    tasks.forEach(t=>{
+    function makeRow(t){
   const row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='auto 1fr auto auto'; row.style.gap='6px'; row.style.alignItems='center'; row.dataset.taskId=t.id;
       const dot=document.createElement('span'); dot.textContent='⭕️'; dot.setAttribute('aria-hidden','true'); dot.style.opacity='0.9'; dot.className='ww-task-handle';
   const inp=document.createElement('textarea'); inp.rows=1; inp.value=t.task; inp.style.width='100%'; inp.style.resize='vertical'; inp.dataset.id=t.id; inp.style.fontSize='15px'; inp.style.lineHeight='1.3'; inp.style.minHeight='34px'; inp.style.padding='6px 8px'; inp.style.minWidth='0';
@@ -4827,9 +5118,13 @@ function renderWW(){
         dot.addEventListener('touchend', ()=>{ clearTimer(); if(dragState) finishDrag(); });
         dot.addEventListener('touchcancel', ()=>{ clearTimer(); if(dragState) cancelDrag(); });
       }
-      listWrap.appendChild(row);
-    });
-    group.appendChild(header); group.appendChild(listWrap); wwList.appendChild(group);
+      return row;
+    }
+    tasks.forEach(t=> listWrap.appendChild(makeRow(t)));
+    // Incremental appender used by addEmptyTask so adding a task doesn't re-render
+    // (and so the keyboard/focus stay put). Keeps the block's task list in sync.
+    group.__appendTask=(taskObj)=>{ tasks.push(taskObj); const r=makeRow(taskObj); listWrap.appendChild(r); return r; };
+    group.appendChild(header); group.appendChild(listWrap);
     // Drag-drop reordering for blocks
   group.addEventListener('dragstart', (e)=>{ if(!e.target.closest('.ww-block-handle')){ e.preventDefault(); return; } e.dataTransfer.setData('text/plain', getCurrentLabel()); group.style.opacity='0.5'; });
     group.addEventListener('dragend', ()=>{ group.style.opacity=''; group.style.borderColor='#ddd'; });
@@ -4838,20 +5133,25 @@ function renderWW(){
     group.addEventListener('drop', (e)=>{ e.preventDefault(); group.style.borderColor='#ddd'; const from=e.dataTransfer.getData('text/plain'); const to=getCurrentLabel(); if(!from||from===to) return; const prof=getCurrentWWProfile(); moveBlock(prof.id, from, to); renderWW(); });
   // Mobile long-press drag support (use dedicated handle)
   enableMobileBlockDrag(blockHandle, group, getCurrentLabel(), prof.id);
-  });
-  updateWWPreview();
+  return group;
 }
 
 // Create empty block (no auto extra blank rows)
+wwAddBlock?.addEventListener('mousedown', e=> e.preventDefault());
 wwAddBlock?.addEventListener('click', ()=>{
   const prof = getCurrentWWProfile();
   if(!prof) return;
   const tempLabel = '(new) ' + (Date.now()%1e7) + '-' + Math.floor(Math.random()*1000);
   wwTasks.push({ id:'ww'+Date.now()+Math.floor(Math.random()*1000), bed: tempLabel, task:'' });
-  saveWW(wwTasks); renderWW();
+  saveWW(wwTasks);
   appendBlockIfMissing(prof.id, tempLabel);
-  // focus newly created ward input after render
-  setTimeout(()=>{ const blocks=[...wwList.querySelectorAll('.ww-block')]; const last=blocks[blocks.length-1]; const w=last?.querySelector('.wwWard'); w?.focus(); }, 50);
+  // Append just the new block (no full re-render) so the keyboard/scroll stay calm.
+  const group=buildWWBlock(prof, tempLabel);
+  wwList.appendChild(group);
+  updateWWPreview();
+  const w=group.querySelector('.wwWard');
+  if(w){ w.focus(); }
+  group.scrollIntoView({ block:'nearest', behavior:'smooth' });
 });
 
 // --- Mobile block drag (long press) ---
@@ -4921,14 +5221,24 @@ function addEmptyTask(bedLabel, focus=false){
   // Allow empty bedLabel - tasks can exist without ward/bed
   const label = bedLabel || '';
   const newId='ww'+Date.now()+Math.floor(Math.random()*1000);
-  wwTasks.push({ id:newId, bed: label, task:'' });
-  saveWW(wwTasks); renderWW();
-  if(focus){
-    setTimeout(()=>{
-      const block=[...wwList.querySelectorAll('.ww-block')].find(b=> b.dataset.label===label);
-      const ta=block?.querySelector(`textarea[data-id="${newId}"]`) || block?.querySelector('textarea[data-id]:last-of-type');
-      if(ta){ ta.focus(); ta.selectionStart=ta.selectionEnd=ta.value.length; }
-    },60);
+  const task={ id:newId, bed: label, task:'' };
+  wwTasks.push(task); saveWW(wwTasks);
+  // Incremental append: don't re-render the whole list, so the keyboard and
+  // scroll position stay put. Fall back to a full render if the block isn't found.
+  const block=[...wwList.querySelectorAll('.ww-block')].find(b=> b.dataset.label===label);
+  if(block && typeof block.__appendTask==='function'){
+    const row=block.__appendTask(task);
+    updateWWPreview();
+    if(focus){ const ta=row.querySelector('textarea[data-id]'); if(ta){ ta.focus(); ta.selectionStart=ta.selectionEnd=ta.value.length; } }
+  } else {
+    renderWW();
+    if(focus){
+      setTimeout(()=>{
+        const b2=[...wwList.querySelectorAll('.ww-block')].find(b=> b.dataset.label===label);
+        const ta=b2?.querySelector(`textarea[data-id="${newId}"]`) || b2?.querySelector('textarea[data-id]:last-of-type');
+        if(ta){ ta.focus(); ta.selectionStart=ta.selectionEnd=ta.value.length; }
+      },60);
+    }
   }
 }
 
@@ -5060,8 +5370,123 @@ try{ const saved=JSON.parse(localStorage.getItem(WW_PREVIEW_OPEN_KEY)||'true'); 
 
 // Removed automatic blank row mechanism; manual add only
 
+/* ===========================================================================
+   Quick I/O draft note
+   ---------------------------------------------------------------------------
+   Lets a user open the Quick Ward Note + I/O calculator WITHOUT first creating
+   a ward/bed. Work is autosaved to a localStorage "draft" slot and can be
+   attached to a ward (new bed) later via the Save button.
+   =========================================================================== */
+const DRAFT_KEY='wardManagerDraftNote-v1';
+let draftMode=false;
+function loadDraft(){ try{ return JSON.parse(localStorage.getItem(DRAFT_KEY)||'null'); }catch{ return null; } }
+function saveDraft(obj){ try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(obj||{})); }catch{} }
+function clearDraft(){ try{ localStorage.removeItem(DRAFT_KEY); }catch{} }
+function hasDraft(){ const d=loadDraft(); return !!(d && Object.keys(d).length); }
+
+// Switch the profile-page header/Save button between "bed" and "draft" looks.
+function setProfileChrome(isDraft){
+  const sub=document.getElementById('profileSubtitle');
+  if(sub) sub.textContent = isDraft
+    ? '📝 Draft — not saved to a ward yet'
+    : 'Fast template for bedside updates';
+  if(saveBtn) saveBtn.textContent = isDraft ? 'Save to Ward…' : 'Save';
+}
+
+function persistDraft(){
+  if(!draftMode) return;
+  const headerSel=document.getElementById('headerStatusSelect');
+  const cur=notifyEditor.getData();
+  saveDraft({ ...cur, status: headerSel ? headerSel.value : 'active' });
+}
+
+function openDraftNote(){
+  draftMode=true;
+  selectedBedId=null;
+  const saved=loadDraft()||{};
+  bedContainer.style.display='none';
+  wardWorkPage.style.display='none';
+  notesPage.style.display='none';
+  profilePage.style.display='flex';
+  setProfileChrome(true);
+  notifyEditor.bootstrap({
+    bed: saved.bed||'', hn: saved.hn||'', hashtags: saved.hashtags||'',
+    cli: saved.cli||'', mx: saved.mx||'',
+    bt: saved.bt||'', pr: saved.pr||'', rr: saved.rr||'', bp: saved.bp||'', o2: saved.o2||'',
+    io: saved.io || [{in:[],out:[]},{in:[],out:[]}],
+    wardName: ''
+  });
+  const headerSel=document.getElementById('headerStatusSelect');
+  const applyHeaderStatus=(val)=>{
+    if(!headerSel) return;
+    headerSel.classList.toggle('status-discharge', val==='discharge');
+    headerSel.classList.toggle('status-active', val!=='discharge');
+  };
+  if(headerSel){
+    headerSel.value = (saved.status==='discharge') ? 'discharge' : 'active';
+    applyHeaderStatus(headerSel.value);
+    headerSel.onchange=()=>{ applyHeaderStatus(headerSel.value); const st=document.getElementById('statusSelect'); if(st) st.value=headerSel.value; persistDraft(); };
+  }
+  const stSel=document.getElementById('statusSelect');
+  if(stSel){
+    stSel.value = headerSel ? headerSel.value : 'active';
+    stSel.onchange=()=>{ if(headerSel){ headerSel.value=stSel.value; applyHeaderStatus(stSel.value); } persistDraft(); };
+  }
+  notifyEditor.onChange(persistDraft);
+  // Focus the bed field for an immediate start
+  setTimeout(()=>{ const bedInput=document.getElementById('bed'); if(bedInput) bedInput.focus(); }, 50);
+}
+
+function openSaveDraftModal(){
+  const modal=document.getElementById('saveDraftModal');
+  const sel=document.getElementById('saveDraftWardSelect');
+  const newRow=document.getElementById('saveDraftNewWardRow');
+  if(!modal||!sel) return;
+  sel.innerHTML='';
+  data.wards.forEach(w=>{ const o=document.createElement('option'); o.value=w.id; o.textContent=w.name||'(unnamed ward)'; sel.appendChild(o); });
+  const newOpt=document.createElement('option'); newOpt.value='__new__'; newOpt.textContent='➕ New ward…'; sel.appendChild(newOpt);
+  if(selectedWardId && data.wards.some(w=>w.id===selectedWardId)) sel.value=selectedWardId;
+  else if(data.wards.length===0) sel.value='__new__';
+  const syncNewRow=()=>{ if(newRow) newRow.style.display = (sel.value==='__new__') ? 'flex' : 'none'; };
+  sel.onchange=syncNewRow; syncNewRow();
+  modal.style.display='flex';
+  setTimeout(()=>{ if(sel.value==='__new__'){ const i=document.getElementById('saveDraftNewWardName'); if(i) i.focus(); } }, 50);
+}
+function closeSaveDraftModal(){ const m=document.getElementById('saveDraftModal'); if(m) m.style.display='none'; }
+function confirmSaveDraft(){
+  const sel=document.getElementById('saveDraftWardSelect');
+  if(!sel) return;
+  let ward;
+  if(sel.value==='__new__'){
+    const name=(document.getElementById('saveDraftNewWardName')?.value||'').trim();
+    if(!name){ alert('Please enter a ward name'); return; }
+    ward={ id:uuid(), name, beds:[] };
+    data.wards.push(ward);
+  } else {
+    ward=data.wards.find(w=>w.id===sel.value);
+    if(!ward){ alert('Ward not found'); return; }
+  }
+  const d=notifyEditor.getData();
+  const headerSel=document.getElementById('headerStatusSelect');
+  const status=(headerSel && headerSel.value==='discharge') ? 'discharge' : 'active';
+  const compat={ dx:d.hashtags, note:d.cli };
+  const bed={ id:uuid(), name:(d.bed||'').trim()||'New Bed', status, details:JSON.stringify({ ...compat, ...d }) };
+  const hn=(d.hn||'').trim(); if(hn) bed.hn=hn;
+  ward.beds.push(bed);
+  saveData();
+  clearDraft();
+  draftMode=false;
+  selectedWardId=ward.id;
+  renderWards(); renderBeds();
+  closeSaveDraftModal();
+  // Continue editing the now-saved bed (further edits autosave to it)
+  openProfilePage(bed);
+}
+
 function openProfilePage(bed, opts={}){
+  draftMode=false;
   selectedBedId=bed.id;
+  setProfileChrome(false);
   // Load existing bed.details (JSON) into editor
   let d={};
   try{ d=JSON.parse(bed.details||'{}'); }catch{}
@@ -5137,15 +5562,26 @@ function openProfilePage(bed, opts={}){
 }
 
 function backToBeds(){
+  // Leaving the page exits draft mode but keeps the draft saved so it can be resumed.
+  draftMode=false;
   profilePage.style.display='none';
   bedContainer.style.display='block';
   wardWorkPage.style.display='none';
   notesPage.style.display='none';
+  renderBeds();
 }
 
 backToBedsBtn.onclick=backToBeds;
 
+// Quick I/O entry points (sidebar button + empty-state CTA)
+document.getElementById('quickIOBtn')?.addEventListener('click', openDraftNote);
+// Save Draft modal wiring
+document.getElementById('saveDraftCancelBtn')?.addEventListener('click', closeSaveDraftModal);
+document.getElementById('saveDraftConfirmBtn')?.addEventListener('click', confirmSaveDraft);
+document.getElementById('saveDraftModal')?.addEventListener('click', (e)=>{ if(e.target.id==='saveDraftModal') closeSaveDraftModal(); });
+
 saveBtn.onclick=()=>{
+  if(draftMode){ openSaveDraftModal(); return; }
   const ward=data.wards.find(w=>w.id===selectedWardId);
   if(!ward) return;
   const bed=ward.beds.find(x=>x.id===selectedBedId);
