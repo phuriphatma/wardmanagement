@@ -531,20 +531,24 @@ body.collapsed #expandSidebarBtn{display:none}
     font-size:14.5px; font-weight:600; box-shadow:0 4px 12px rgba(37,99,235,.28); }
   #quickIOBtn:hover{ background:var(--primary-700); }
 
-  .side-nav{ display:flex; flex-direction:column; gap:2px; margin-top:4px; }
-  .side-nav button{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; justify-content:flex-start;
-    padding:9px 10px; border-radius:8px; font-size:14px; font-weight:500; color:var(--ink-2); }
-  .side-nav button:hover{ background:var(--surface-2); }
-  .side-nav .nav-ico{ width:18px; text-align:center; font-size:15px; opacity:.95; flex:0 0 auto; }
+  /* Sidebar nav: clear, tappable rows with an icon chip (not a plain text list) */
+  .side-nav{ display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+  .side-nav button{ display:flex; align-items:center; gap:12px; width:100%; text-align:left; justify-content:flex-start;
+    min-height:48px; padding:8px 12px; border-radius:12px; border:1px solid var(--line-2); background:#fff;
+    font-size:15px; font-weight:600; color:var(--ink); box-shadow:var(--sh-sm); }
+  .side-nav button:hover{ background:var(--surface-2); border-color:#94a3b8; }
+  .side-nav button:active{ transform:translateY(1px); }
+  .side-nav .nav-ico{ width:32px; height:32px; flex:0 0 auto; display:grid; place-items:center; border-radius:9px;
+    background:var(--primary-tint); border:1px solid #dbe7ff; font-size:16px; line-height:1; }
 
   /* Profile selector chip + its popover */
-  .profiles-menu{ position:relative; margin-top:6px; }
-  #profileMenuBtn{ width:100%; display:flex; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line);
-    border-radius:var(--r); background:var(--surface-2); color:var(--ink); font-size:13px; }
-  #profileMenuBtn:hover{ border-color:var(--line-2); background:#fff; }
+  .profiles-menu{ position:relative; margin-top:8px; }
+  #sidebarHeader #profileMenuBtn{ width:100%; display:flex; align-items:center; gap:8px; min-height:48px; padding:10px 14px; border:1px solid var(--line);
+    border-radius:12px; background:var(--surface-2); color:var(--ink); font-size:14px; }
+  #sidebarHeader #profileMenuBtn:hover{ border-color:var(--line-2); background:#fff; }
   #profileMenuBtn .chip-eyebrow{ font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
-  #profileMenuBtn .chip-name{ font-weight:600; color:var(--ink); margin-left:2px; }
-  #profileMenuBtn .chip-caret{ margin-left:auto; color:var(--muted); font-size:12px; }
+  #profileMenuBtn .chip-name{ font-weight:700; color:var(--ink); margin-left:2px; font-size:15px; }
+  #profileMenuBtn .chip-caret{ margin-left:auto; color:var(--muted); font-size:14px; }
 
   /* All three header popovers: modern card + never clipped */
   #profileMenuPanel,#wwProfileMenuPanel,#notesProfileMenuPanel{
